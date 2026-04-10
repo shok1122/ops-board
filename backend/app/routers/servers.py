@@ -1,7 +1,11 @@
+import json
 from fastapi import APIRouter, HTTPException
 from app.database import get_db, new_id, now_iso
 from app.crypto import encrypt, decrypt
-from app.models import ServerCreate, ServerUpdate, ServerOut, TestResult, ServerStatusOut, PagedResponse
+from app.models import (
+    ServerCreate, ServerUpdate, ServerOut, TestResult,
+    ServerStatusOut, ServerJobResult, JobResultOutput, PagedResponse,
+)
 from app.ssh import test_connection, get_system_status
 
 router = APIRouter(prefix="/servers", tags=["servers"])
@@ -220,6 +224,63 @@ async def get_server_status_history(server_id: str, limit: int = 48):
         )
         for r in reversed(rows)  # oldest first for charts
     ]
+
+
+@router.get("/{server_id}/job-results", response_model=list[ServerJobResult])
+async def get_server_job_results(server_id: str):
+    """Return the latest execution result for each job associated with this server."""
+    async with get_db() as db:
+        cur = await db.execute("SELECT id FROM servers WHERE id = ?", (server_id,))
+        if not await cur.fetchone():
+            raise HTTPException(404, "Server not found")
+
+        # Latest execution per job for this server
+        cur = await db.execute(
+            "SELECT e.id, e.job_id, j.name AS job_name, e.status AS execution_status, "
+            "e.finished_at, e.stdout, e.parsed_result "
+            "FROM executions e "
+            "INNER JOIN jobs j ON e.job_id = j.id "
+            "INNER JOIN ("
+            "  SELECT job_id, MAX(started_at) AS latest "
+            "  FROM executions GROUP BY job_id"
+            ") latest ON e.job_id = latest.job_id AND e.started_at = latest.latest "
+            "WHERE j.server_id = ? "
+            "ORDER BY j.name",
+            (server_id,),
+        )
+        rows = await cur.fetchall()
+
+    results = []
+    for row in rows:
+        output = None
+        raw_stdout = row["stdout"]
+
+        # stdout is expected to be a single JSON object (job_result_schema.json format).
+        # This applies to both command (stdout of the command) and
+        # log_fetch (contents of the JSON file).
+        if row["stdout"]:
+            try:
+                obj = json.loads(row["stdout"].strip())
+                if isinstance(obj, dict):
+                    output = JobResultOutput(**{
+                        k: v for k, v in obj.items()
+                        if k in JobResultOutput.model_fields
+                    })
+                    raw_stdout = None
+            except (json.JSONDecodeError, Exception):
+                pass
+
+        results.append(ServerJobResult(
+            job_id=row["job_id"],
+            job_name=row["job_name"],
+            execution_id=row["id"],
+            execution_status=row["execution_status"],
+            finished_at=row["finished_at"],
+            output=output,
+            raw_stdout=raw_stdout,
+        ))
+
+    return results
 
 
 @router.get("/{server_id}/status", response_model=ServerStatusOut)

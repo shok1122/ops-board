@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type {
-  Server, ServerCreate, TestResult, ServerStatus,
+  Server, ServerCreate, TestResult, ServerStatus, ServerJobResult,
   Job, JobCreate,
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
@@ -35,6 +35,9 @@ export const getAllLatestStatuses = () =>
 
 export const getServerStatusHistory = (id: string, limit = 48) =>
   api.get<ServerStatus[]>(`/servers/${id}/status/history`, { params: { limit } }).then(r => r.data)
+
+export const getServerJobResults = (id: string) =>
+  api.get<ServerJobResult[]>(`/servers/${id}/job-results`).then(r => r.data)
 
 // Jobs
 export const getJob = (id: string) =>

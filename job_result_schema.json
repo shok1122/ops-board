@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpsBoard Job Result",
+  "description": "ジョブコマンドの標準出力フォーマット。コマンドはこの形式のJSONを stdout に出力してください。",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "結果の表示タイトル（省略時はジョブ名を使用）"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "warn", "error"],
+      "description": "結果のステータス。ok=正常 / warn=警告 / error=異常"
+    },
+    "value": {
+      "type": ["number", "string"],
+      "description": "メインの数値または文字列（例: 42.3、\"running\"）"
+    },
+    "unit": {
+      "type": "string",
+      "description": "valueの単位（例: \"%\"、\"GB\"、\"ms\"）"
+    },
+    "message": {
+      "type": "string",
+      "description": "補足メッセージ（例: \"ディスク残量が少なくなっています\"）"
+    },
+    "items": {
+      "type": "array",
+      "description": "詳細な項目リスト",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string", "description": "項目名" },
+          "value": { "type": ["string", "number"], "description": "値" },
+          "unit":  { "type": "string", "description": "単位（省略可）" },
+          "status": {
+            "type": "string",
+            "enum": ["ok", "warn", "error"],
+            "description": "項目ごとのステータス（省略可）"
+          }
+        },
+        "required": ["label", "value"]
+      }
+    }
+  },
+  "examples": [
+    {
+      "title": "ディスク使用量",
+      "status": "warn",
+      "value": 82,
+      "unit": "%",
+      "message": "使用率が80%を超えています",
+      "items": [
+        { "label": "/",     "value": "82", "unit": "%" , "status": "warn" },
+        { "label": "/data", "value": "45", "unit": "%" , "status": "ok"   }
+      ]
+    },
+    {
+      "title": "サービス死活確認",
+      "status": "ok",
+      "items": [
+        { "label": "nginx",    "value": "running", "status": "ok"    },
+        { "label": "postgres", "value": "running", "status": "ok"    },
+        { "label": "redis",    "value": "stopped", "status": "error" }
+      ]
+    },
+    {
+      "title": "レスポンスタイム",
+      "status": "ok",
+      "value": 123,
+      "unit": "ms"
+    }
+  ]
+}

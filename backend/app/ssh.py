@@ -71,13 +71,13 @@ async def fetch_file(
     port: int,
     username: str,
     file_path: str,
-    lines: int = 500,
     password: Optional[str] = None,
     private_key: Optional[str] = None,
     passphrase: Optional[str] = None,
     timeout: float = 30.0,
 ) -> SSHResult:
-    command = f"tail -n {lines} {file_path}"
+    """Fetch a file's full contents (expected to be a single JSON document)."""
+    command = f"cat {file_path}"
     return await run_command(
         host, port, username, command,
         password=password, private_key=private_key, passphrase=passphrase,

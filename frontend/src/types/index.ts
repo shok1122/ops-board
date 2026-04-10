@@ -107,3 +107,29 @@ export interface PagedResponse<T> {
 export interface AppSettings {
   status_check_interval_minutes: number
 }
+
+export interface JobResultItem {
+  label: string
+  value: string | number
+  unit?: string
+  status?: 'ok' | 'warn' | 'error'
+}
+
+export interface JobResultOutput {
+  title?: string
+  status?: 'ok' | 'warn' | 'error'
+  value?: string | number
+  unit?: string
+  message?: string
+  items?: JobResultItem[]
+}
+
+export interface ServerJobResult {
+  job_id: string
+  job_name: string
+  execution_id: string
+  execution_status: string
+  finished_at?: string
+  output?: JobResultOutput
+  raw_stdout?: string
+}

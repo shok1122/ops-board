@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Loader2, Terminal, List } from 'lucide-react'
+import { ArrowLeft, Loader2, Terminal, LayoutList } from 'lucide-react'
 import { getExecution } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import LogViewer from '../components/LogViewer'
+import { JobResultView } from '../components/JobResultView'
+import type { JobResultOutput } from '../types'
 import { format } from 'date-fns'
 
 export default function ExecutionDetail() {
@@ -32,7 +34,16 @@ export default function ExecutionDetail() {
     ? Math.round((new Date(exec.finished_at).getTime() - new Date(exec.started_at).getTime()) / 1000)
     : null
 
-  const hasParsed = exec.parsed_result && exec.parsed_result.length > 0
+  // parsed_result is stored as a JobResultOutput JSON object
+  const jobOutput: JobResultOutput | null = (() => {
+    if (!exec.parsed_result || exec.parsed_result.length === 0) return null
+    const first = exec.parsed_result[0] as unknown
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+      return first as JobResultOutput
+    }
+    return null
+  })()
+  const hasParsed = jobOutput !== null
   const hasRaw = !!exec.stdout || !!exec.stderr
 
   return (
@@ -73,7 +84,7 @@ export default function ExecutionDetail() {
                 onClick={() => setView('parsed')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${view === 'parsed' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
-                <List className="h-3.5 w-3.5" /> 構造化
+                <LayoutList className="h-3.5 w-3.5" /> 結果
               </button>
               <button
                 onClick={() => setView('raw')}
@@ -90,8 +101,8 @@ export default function ExecutionDetail() {
               <Loader2 className="h-4 w-4 animate-spin" /> 実行中…
             </div>
           )}
-          {view === 'parsed' && hasParsed ? (
-            <LogViewer entries={exec.parsed_result} maxHeight="60vh" />
+          {view === 'parsed' && hasParsed && jobOutput ? (
+            <JobResultView output={jobOutput} />
           ) : (
             <div className="space-y-4">
               {exec.stdout && (

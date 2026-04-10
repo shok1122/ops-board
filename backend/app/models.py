@@ -137,6 +137,34 @@ class ExecutionSummary(BaseModel):
     created_at: str
 
 
+# ── Job Result (structured stdout) ───────────────────────────────────────────
+
+class JobResultItem(BaseModel):
+    label: str
+    value: Any
+    unit: Optional[str] = None
+    status: Optional[Literal["ok", "warn", "error"]] = None
+
+
+class JobResultOutput(BaseModel):
+    title: Optional[str] = None
+    status: Optional[Literal["ok", "warn", "error"]] = None
+    value: Optional[Any] = None
+    unit: Optional[str] = None
+    message: Optional[str] = None
+    items: Optional[list[JobResultItem]] = None
+
+
+class ServerJobResult(BaseModel):
+    job_id: str
+    job_name: str
+    execution_id: str
+    execution_status: str
+    finished_at: Optional[str]
+    output: Optional[JobResultOutput] = None
+    raw_stdout: Optional[str] = None
+
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 class PagedResponse(BaseModel):

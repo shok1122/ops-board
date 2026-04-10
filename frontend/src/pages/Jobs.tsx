@@ -221,9 +221,9 @@ export default function Jobs() {
                     className="input font-mono text-sm" placeholder="/opt/scripts/backup.sh" />
                 </Field>
               ) : (
-                <Field label="ログファイルパス *">
+                <Field label="JSONファイルパス *">
                   <input required value={form.log_path ?? ''} onChange={e => setForm(f => ({ ...f, log_path: e.target.value }))}
-                    className="input font-mono text-sm" placeholder="/var/log/myapp/task.log" />
+                    className="input font-mono text-sm" placeholder="/var/lib/myapp/status.json" />
                 </Field>
               )}
               <Field label="スケジュール (cron 5フィールド)">

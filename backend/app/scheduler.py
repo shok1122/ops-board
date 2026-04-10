@@ -7,7 +7,18 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.database import get_db, new_id, now_iso
-from app.log_parser import parse_log_output
+def _parse_job_output(stdout: str) -> dict | None:
+    """Try to parse stdout as a JobResultOutput JSON object.
+    Returns the parsed dict on success, or None if not valid JSON / not a dict."""
+    if not stdout:
+        return None
+    try:
+        obj = json.loads(stdout.strip())
+        if isinstance(obj, dict):
+            return obj
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +94,7 @@ async def _execute_job(job_id: str):
             )
 
         status = "success" if result.exit_code == 0 else "failure"
-        parsed = parse_log_output(result.stdout)
+        parsed = _parse_job_output(result.stdout)
         finished = now_iso()
 
         async with get_db() as db:
@@ -93,7 +104,7 @@ async def _execute_job(job_id: str):
                 (
                     finished, status, result.exit_code,
                     result.stdout, result.stderr,
-                    json.dumps(parsed, ensure_ascii=False),
+                    json.dumps(parsed, ensure_ascii=False) if parsed is not None else None,
                     exec_id,
                 ),
             )
@@ -186,7 +197,7 @@ async def _trigger_job_manual(job_id: str):
             )
 
         status = "success" if result.exit_code == 0 else "failure"
-        parsed = parse_log_output(result.stdout)
+        parsed = _parse_job_output(result.stdout)
         finished = now_iso()
 
         async with get_db() as db:
@@ -196,7 +207,7 @@ async def _trigger_job_manual(job_id: str):
                 (
                     finished, status, result.exit_code,
                     result.stdout, result.stderr,
-                    json.dumps(parsed, ensure_ascii=False),
+                    json.dumps(parsed, ensure_ascii=False) if parsed is not None else None,
                     exec_id,
                 ),
             )
