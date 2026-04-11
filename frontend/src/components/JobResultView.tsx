@@ -25,7 +25,7 @@ export function JobResultView({ output }: { output: JobResultOutput }) {
         {output.status && <ResultBadge status={output.status} />}
       </div>
 
-      {(output.value !== undefined || output.unit) && (
+      {(output.value != null || output.unit) && (
         <div className="text-3xl font-bold text-gray-800">
           {output.value}
           <span className="text-base font-normal text-gray-400 ml-1">{output.unit}</span>
