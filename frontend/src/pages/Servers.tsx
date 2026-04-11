@@ -198,8 +198,12 @@ function ServerJobResults({ serverId }: { serverId: string }) {
   return (
     <div className="mt-3">
       <p className="text-xs font-medium text-gray-500 mb-2">ジョブ実行結果</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {data.map(r => <JobResultCard key={r.job_id} result={r} />)}
+      <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
+        {data.map(r => (
+          <div key={r.job_id} className="break-inside-avoid mb-2">
+            <JobResultCard result={r} />
+          </div>
+        ))}
       </div>
     </div>
   )
