@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { JobResultOutput, ServerJobResult } from '../types'
 
 const STATUS_COLORS = {
@@ -24,30 +25,40 @@ export function JobResultCard({ result }: { result: ServerJobResult }) {
     : execStatus === 'failure' || execStatus === 'timeout' ? 'border-red-200'
     : 'border-gray-200'
 
+  const badge = result.output?.status
+    ? <ResultBadge status={result.output.status} />
+    : execStatus === 'success'
+      ? <ResultBadge status="ok" />
+      : execStatus === 'failure' || execStatus === 'timeout'
+        ? <ResultBadge status="error" />
+        : null
+
   return (
     <div className={`rounded-lg border ${borderColor} bg-white p-3 flex flex-col gap-2`}>
+      {/* タイムスタンプ・ジョブ名リンク */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-gray-700 truncate">
-          {result.job_name ?? '-'}
+        {result.finished_at && (
+          <span className="text-[10px] text-gray-400">
+            {new Date(result.finished_at).toLocaleString('ja-JP')}
+          </span>
+        )}
+        <span className="text-[10px] text-gray-400">
+          Job Name: <Link to={`/jobs/${result.job_id}`} className="text-indigo-600 hover:underline">{result.job_name}</Link>
+        </span>
+      </div>
+
+      {/* title・ステータス・タイムスタンプ */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-gray-800 truncate">
+          {result.output?.title ?? result.job_name ?? '-'}
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
-          {result.output?.status
-            ? <ResultBadge status={result.output.status} />
-            : execStatus === 'success'
-              ? <ResultBadge status="ok" />
-              : execStatus === 'failure' || execStatus === 'timeout'
-                ? <ResultBadge status="error" />
-                : null}
-          {result.finished_at && (
-            <span className="text-[10px] text-gray-400">
-              {new Date(result.finished_at).toLocaleString('ja-JP')}
-            </span>
-          )}
+          {badge}
         </div>
       </div>
 
       {result.output ? (
-        <JobResultView output={result.output} />
+        <JobResultView output={result.output} hideTitle />
       ) : result.raw_stdout ? (
         <pre className="text-[10px] text-gray-500 bg-gray-50 rounded p-2 max-h-20 overflow-auto whitespace-pre-wrap">
           {result.raw_stdout.trim()}
@@ -57,13 +68,15 @@ export function JobResultCard({ result }: { result: ServerJobResult }) {
   )
 }
 
-export function JobResultView({ output }: { output: JobResultOutput }) {
+export function JobResultView({ output, hideTitle }: { output: JobResultOutput; hideTitle?: boolean }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        {output.title && <span className="font-medium text-gray-800">{output.title}</span>}
-        {output.status && <ResultBadge status={output.status} />}
-      </div>
+      {!hideTitle && (
+        <div className="flex items-center gap-3">
+          {output.title && <span className="font-medium text-gray-800">{output.title}</span>}
+          {output.status && <ResultBadge status={output.status} />}
+        </div>
+      )}
 
       {(output.value != null || output.unit) && (
         <div className="text-3xl font-bold text-gray-800">
