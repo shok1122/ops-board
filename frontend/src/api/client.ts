@@ -78,6 +78,13 @@ export const getExecution = (id: string) =>
 export const deleteExecution = (id: string) =>
   api.delete(`/executions/${id}`)
 
+// Config export/import
+export const exportConfig = () =>
+  api.get('/config/export').then(r => r.data)
+
+export const importConfig = (data: unknown) =>
+  api.post('/config/import', data).then(r => r.data)
+
 // Settings
 export const getAppSettings = () =>
   api.get<AppSettings>('/settings').then(r => r.data)
