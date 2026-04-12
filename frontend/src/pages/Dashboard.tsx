@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
 function AlertJobResults() {
-  const { data: servers } = useQuery({
+  const { data: servers, isLoading: serversLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: getServers,
   })
@@ -21,6 +21,8 @@ function AlertJobResults() {
     })),
   })
 
+  const isLoading = serversLoading || jobResultQueries.some(q => q.isLoading)
+
   const serverAlerts = (servers?.items ?? [])
     .map((s, i) => {
       const results = jobResultQueries[i]?.data ?? []
@@ -32,25 +34,34 @@ function AlertJobResults() {
     })
     .filter(x => x.alerts.length > 0)
 
-  if (serverAlerts.length === 0) return null
-
   return (
     <div className="mb-8">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">アラート</h2>
-      <div className="space-y-4">
-        {serverAlerts.map(({ server, alerts }) => (
-          <div key={server.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">{server.name}</p>
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
-              {alerts.map(r => (
-                <div key={r.job_id} className="break-inside-avoid mb-2">
-                  <JobResultCard result={r} />
-                </div>
-              ))}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
+        </div>
+      ) : serverAlerts.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-6 py-8 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
+          <p className="text-sm text-gray-500">現在アラートはありません</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {serverAlerts.map(({ server, alerts }) => (
+            <div key={server.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">{server.name}</p>
+              <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
+                {alerts.map(r => (
+                  <div key={r.job_id} className="break-inside-avoid mb-2">
+                    <JobResultCard result={r} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
