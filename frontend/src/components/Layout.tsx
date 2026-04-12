@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle,
@@ -16,6 +16,8 @@ const nav = [
 export default function Layout() {
   const qc = useQueryClient()
   const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const doExport = async () => {
     setExportModalOpen(false)
@@ -29,7 +31,12 @@ export default function Layout() {
     URL.revokeObjectURL(url)
   }
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const doImportConfirm = () => {
+    setImportModalOpen(false)
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
@@ -42,7 +49,6 @@ export default function Layout() {
         alert('JSONの解析に失敗しました。ファイルを確認してください。')
         return
       }
-      if (!confirm('現在のサーバーとジョブの設定をすべて削除し、インポートした設定に置き換えます。\nよろしいですか？')) return
       try {
         await importConfig(parsed)
         qc.invalidateQueries({ queryKey: ['servers'] })
@@ -93,11 +99,14 @@ export default function Layout() {
             <Download className="h-4 w-4 flex-shrink-0" />
             エクスポート
           </button>
-          <label className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer">
+          <button
+            onClick={() => setImportModalOpen(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+          >
             <Upload className="h-4 w-4 flex-shrink-0" />
             インポート
-            <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-          </label>
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileSelect} />
           <div className="px-2 pt-2 text-xs text-gray-500">v1.0.0</div>
         </div>
       </aside>
@@ -106,6 +115,42 @@ export default function Layout() {
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
+
+      {/* Import confirm modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-4">
+              <h2 className="font-semibold text-gray-900">設定のインポート</h2>
+            </div>
+            <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
+              <p>JSON ファイルからサーバーとジョブの設定をインポートします。</p>
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-medium">現在の設定はすべて削除されます</p>
+                  <p className="text-xs">現在登録されているサーバーとジョブをすべて削除し、インポートした設定に置き換えます。この操作は元に戻せません。</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                onClick={() => setImportModalOpen(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={doImportConfirm}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                <Upload className="h-4 w-4" />
+                ファイルを選択してインポート
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export confirm modal */}
       {exportModalOpen && (
