@@ -1,10 +1,59 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, XCircle, Loader2, Calendar, Server, TrendingUp } from 'lucide-react'
-import { getDashboardStats } from '../api/client'
+import { CheckCircle2, XCircle, Loader2, Calendar, TrendingUp } from 'lucide-react'
+import { getDashboardStats, getServers, getServerJobResults } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
+import { JobResultCard } from '../components/JobResultView'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
+
+function AlertJobResults() {
+  const { data: servers } = useQuery({
+    queryKey: ['servers'],
+    queryFn: getServers,
+  })
+
+  const jobResultQueries = useQueries({
+    queries: (servers?.items ?? []).map(s => ({
+      queryKey: ['server-job-results', s.id],
+      queryFn: () => getServerJobResults(s.id),
+      refetchInterval: 60_000,
+    })),
+  })
+
+  const serverAlerts = (servers?.items ?? [])
+    .map((s, i) => {
+      const results = jobResultQueries[i]?.data ?? []
+      const alerts = results.filter(r =>
+        r.output?.status === 'error' || r.output?.status === 'warn' ||
+        (r.output == null && (r.execution_status === 'failure' || r.execution_status === 'timeout'))
+      )
+      return { server: s, alerts }
+    })
+    .filter(x => x.alerts.length > 0)
+
+  if (serverAlerts.length === 0) return null
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">アラート</h2>
+      <div className="space-y-4">
+        {serverAlerts.map(({ server, alerts }) => (
+          <div key={server.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">{server.name}</p>
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
+              {alerts.map(r => (
+                <div key={r.job_id} className="break-inside-avoid mb-2">
+                  <JobResultCard result={r} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const { data, isLoading } = useQuery({
@@ -59,6 +108,8 @@ export default function Dashboard() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">ダッシュボード</h1>
+
+      <AlertJobResults />
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-8">

@@ -9,8 +9,8 @@ import {
   checkServerStatus, getAllLatestStatuses, getServerStatusHistory,
   getServerJobResults, getAppSettings, updateAppSettings,
 } from '../api/client'
-import type { Server as ServerType, ServerCreate, ServerStatus, ServerJobResult } from '../types'
-import { ResultBadge, JobResultView } from '../components/JobResultView'
+import type { Server as ServerType, ServerCreate, ServerStatus } from '../types'
+import { JobResultCard } from '../components/JobResultView'
 
 const emptyForm: ServerCreate = {
   name: '', host: '', port: 22, username: '',
@@ -137,52 +137,6 @@ function StatusSummary({ status }: { status: ServerStatus }) {
       {diskPct != null && <Chip label="ディスク" value={`${status.disk_used_gb}/${status.disk_total_gb}GB (${diskPct}%)`} warn={diskPct > 80} />}
       {status.uptime_seconds != null && <Chip label="稼働" value={formatUptime(status.uptime_seconds)} />}
       <span className="text-gray-400 ml-auto">{new Date(status.checked_at).toLocaleString('ja-JP')} 時点</span>
-    </div>
-  )
-}
-
-const STATUS_COLORS = {
-  ok:    { text: 'text-emerald-700', dot: 'bg-emerald-400' },
-  warn:  { text: 'text-amber-700',   dot: 'bg-amber-400'   },
-  error: { text: 'text-red-700',     dot: 'bg-red-400'     },
-}
-
-function JobResultCard({ result }: { result: ServerJobResult }) {
-  const execStatus = result.execution_status
-  const borderColor = result.output?.status === 'error' ? 'border-red-200'
-    : result.output?.status === 'warn' ? 'border-amber-200'
-    : execStatus === 'failure' || execStatus === 'timeout' ? 'border-red-200'
-    : 'border-gray-200'
-
-  return (
-    <div className={`rounded-lg border ${borderColor} bg-white p-3 flex flex-col gap-2`}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-gray-700 truncate">
-          {result.job_name ?? '-'}
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {result.output?.status
-            ? <ResultBadge status={result.output.status} />
-            : execStatus === 'success'
-              ? <ResultBadge status="ok" />
-              : execStatus === 'failure' || execStatus === 'timeout'
-                ? <ResultBadge status="error" />
-                : null}
-          {result.finished_at && (
-            <span className="text-[10px] text-gray-400">
-              {new Date(result.finished_at).toLocaleString('ja-JP')}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {result.output ? (
-        <JobResultView output={result.output} />
-      ) : result.raw_stdout ? (
-        <pre className="text-[10px] text-gray-500 bg-gray-50 rounded p-2 max-h-20 overflow-auto whitespace-pre-wrap">
-          {result.raw_stdout.trim()}
-        </pre>
-      ) : null}
     </div>
   )
 }
