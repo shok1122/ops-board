@@ -8,8 +8,9 @@ import {
   getServers, createServer, updateServer, deleteServer, testServer,
   checkServerStatus, getAllLatestStatuses, getServerStatusHistory,
   getServerJobResults, getAppSettings, updateAppSettings,
+  getMonitors, getMonitorData,
 } from '../api/client'
-import type { Server as ServerType, ServerCreate, ServerStatus } from '../types'
+import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, MonitorDataPoint } from '../types'
 import { JobResultCard } from '../components/JobResultView'
 
 const emptyForm: ServerCreate = {
@@ -141,6 +142,50 @@ function StatusSummary({ status }: { status: ServerStatus }) {
   )
 }
 
+
+function MonitorMiniChart({ monitor }: { monitor: Monitor }) {
+  const { data: points = [] } = useQuery<MonitorDataPoint[]>({
+    queryKey: ['monitor-data', monitor.id],
+    queryFn: () => getMonitorData(monitor.id, 24, 48),
+    refetchInterval: monitor.interval_minutes * 60 * 1000,
+  })
+
+  const chartData = points.map(p => ({
+    time: new Date(p.collected_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+    value: p.value ?? null,
+  }))
+
+  return (
+    <MiniChart
+      data={chartData}
+      dataKey="value"
+      label={monitor.name}
+      color="#8b5cf6"
+      unit={monitor.unit ?? ''}
+      warnAt={monitor.warning_threshold ?? undefined}
+    />
+  )
+}
+
+function ServerMonitorCharts({ serverId }: { serverId: string }) {
+  const { data: monitors = [] } = useQuery<Monitor[]>({
+    queryKey: ['monitors', serverId],
+    queryFn: () => getMonitors(serverId),
+    refetchInterval: 60_000,
+  })
+
+  const enabled = monitors.filter(m => m.enabled)
+  if (enabled.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-gray-500 mb-2">Monitor</p>
+      <div className="grid grid-cols-3 gap-4">
+        {enabled.map(m => <MonitorMiniChart key={m.id} monitor={m} />)}
+      </div>
+    </div>
+  )
+}
 
 function ServerJobResults({ serverId }: { serverId: string }) {
   const { data } = useQuery({
@@ -353,6 +398,7 @@ export default function Servers() {
                   ) : (
                     <p className="text-xs text-gray-400">「今すぐ確認」を押すか、自動確認を有効にすると状態が表示されます。</p>
                   )}
+                  <ServerMonitorCharts serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
                 </div>
               </div>
