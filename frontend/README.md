@@ -1,227 +1,218 @@
-# OpsBoard フロントエンド
+# OpsBoard Frontend
 
-OpsBoard のフロントエンドアプリケーションです。  
-React + TypeScript + Vite で構築された SPA で、バックエンド API と通信してリモートサーバーのタスク実行結果を表示します。
+The frontend application for OpsBoard.  
+A SPA built with React + TypeScript + Vite that communicates with the backend API to display remote server task execution results.
 
-## 技術スタック
+## Tech Stack
 
-| ライブラリ | バージョン | 用途 |
-|-----------|-----------|------|
-| React | 18 | UIフレームワーク |
-| TypeScript | 5 | 型安全 |
-| Vite | 5 | ビルドツール・開発サーバー |
-| Tailwind CSS | 3 | スタイリング |
-| TanStack Query | 5 | サーバー状態管理・自動ポーリング |
-| React Router | 6 | SPA ルーティング |
-| axios | 1 | HTTP クライアント |
-| date-fns | 3 | 日付フォーマット |
-| lucide-react | - | アイコン |
+| Library | Version | Purpose |
+|---------|---------|---------|
+| React | 18 | UI framework |
+| TypeScript | 5 | Type safety |
+| Vite | 5 | Build tool and dev server |
+| Tailwind CSS | 3 | Styling |
+| TanStack Query | 5 | Server state management and auto-polling |
+| React Router | 6 | SPA routing |
+| axios | 1 | HTTP client |
+| date-fns | 3 | Date formatting |
+| lucide-react | — | Icons |
 
-## ディレクトリ構成
+## Directory Structure
 
 ```
 frontend/
 ├── src/
-│   ├── main.tsx            # エントリポイント (QueryClient 初期化)
-│   ├── App.tsx             # ルーター定義
-│   ├── index.css           # グローバルスタイル・Tailwind utilities
+│   ├── main.tsx            # Entry point (QueryClient initialization)
+│   ├── App.tsx             # Router definition, AuthProvider wrapper, ProtectedRoute
+│   ├── index.css           # Global styles and Tailwind utilities
 │   │
 │   ├── api/
-│   │   ├── client.ts       # axios インスタンス + API 関数一覧・認証インターセプター
-│   │   └── auth.ts         # ログイン API 関数
+│   │   ├── client.ts       # axios instance + API functions + auth interceptors
+│   │   └── auth.ts         # Login API function
 │   │
 │   ├── contexts/
-│   │   └── AuthContext.tsx # 認証状態管理 (トークン・ログイン/ログアウト)
+│   │   └── AuthContext.tsx # Auth state management (token, login/logout)
 │   │
 │   ├── types/
-│   │   └── index.ts        # TypeScript 型定義 (バックエンド Pydantic モデルと対応)
+│   │   └── index.ts        # TypeScript types (mirrors backend Pydantic models)
 │   │
-│   ├── components/         # 再利用コンポーネント
-│   │   ├── Layout.tsx      # サイドバーナビゲーション + Outlet + ログアウトボタン
-│   │   ├── StatusBadge.tsx # 実行ステータスのバッジ (success / failure / running / timeout)
-│   │   └── LogViewer.tsx   # ログ表示 (NDJSON テーブル / RAW テキスト)
+│   ├── components/         # Reusable components
+│   │   ├── Layout.tsx      # Sidebar navigation + Outlet + logout button
+│   │   ├── StatusBadge.tsx # Execution status badge (success / failure / running / timeout)
+│   │   └── LogViewer.tsx   # Log display (NDJSON table / raw text)
 │   │
-│   └── pages/              # ページコンポーネント
-│       ├── Login.tsx           # ログイン画面
-│       ├── Dashboard.tsx       # サマリーカード + 最近の実行一覧
-│       ├── Servers.tsx         # サーバー管理 (CRUD + 接続テスト)
-│       ├── Jobs.tsx            # ジョブ管理 (CRUD + 即時実行 + 有効/無効)
-│       ├── JobDetail.tsx       # ジョブ詳細 + 実行履歴一覧
-│       ├── Executions.tsx      # 全実行履歴 (フィルタ + ページネーション)
-│       └── ExecutionDetail.tsx # 実行詳細 + ログビューア
+│   └── pages/              # Page components
+│       ├── Login.tsx           # Login screen
+│       ├── Dashboard.tsx       # Summary cards + recent execution list
+│       ├── Servers.tsx         # Server management (CRUD + connection test)
+│       ├── Jobs.tsx            # Job management (CRUD + manual trigger + enable/disable)
+│       ├── JobDetail.tsx       # Job detail + execution history list
+│       ├── Executions.tsx      # All execution history (filter + pagination)
+│       └── ExecutionDetail.tsx # Execution detail + log viewer
 │
 ├── index.html
-├── vite.config.ts          # Vite 設定 + API プロキシ
+├── vite.config.ts          # Vite config + API proxy
 ├── tailwind.config.js
 ├── tsconfig.json
 ├── postcss.config.js
 ├── package.json
-└── Dockerfile              # nginx による本番ビルドイメージ
+└── Dockerfile              # Production build image served by nginx
 ```
 
-## ローカル開発
+## Local Development
 
-本番環境では `docker compose up` でまとめて起動しますが、フロントエンドのコードを変更しながら開発する際は Vite の開発サーバーを直接起動することでホットリロードが使えて効率的です。
+In production everything starts with `docker compose up`, but for active frontend development you can run the Vite dev server directly for hot reloading.
 
-バックエンドが `http://localhost:8000` で起動している状態で以下を実行します。
+With the backend running at `http://localhost:8000`:
 
 ```bash
 cd frontend
 
-# 依存関係のインストール
+# Install dependencies
 npm install
 
-# 開発サーバー起動
+# Start dev server
 npm run dev
 ```
 
-`http://localhost:5173` でアクセスできます。  
-`/api/*` へのリクエストは自動的に `http://localhost:8000` へプロキシされます（`vite.config.ts` で設定）。
+Available at `http://localhost:5173`.  
+Requests to `/api/*` are automatically proxied to `http://localhost:8000` (configured in `vite.config.ts`).
 
-### バックエンドの起動方法
+### Starting the Backend
 
 ```bash
-# プロジェクトルートで
 cd ../backend
-pip install -r requirements.txt
+pip install -e .
 uvicorn app.main:app --reload
 ```
 
-## ビルド
+## Build
 
 ```bash
 npm run build
 ```
 
-`dist/` に静的ファイルが出力されます。本番では Docker イメージ内の nginx で配信します。
+Static files are output to `dist/`. In production they are served by nginx inside the Docker image.
 
-## コンポーネント解説
+## Authentication Flow
 
-### `Login.tsx`
+1. On app load, `GET /api/v1/auth/status` is called to check whether auth is required
+2. If auth is required and no token is stored → redirect to `/login`
+3. After a successful login, the token is saved in `localStorage`
+4. All subsequent API requests automatically include `Authorization: Bearer <token>`
+5. On a 401 response, the token is discarded and the user is redirected to `/login`
 
-パスワード入力フォームを持つログイン画面です。  
-ロックアウト中（HTTP 429）は残り時間をエラーメッセージとして表示します。  
-認証が無効な環境ではこのページには遷移しません。
+`AuthContext` is provided to the entire app via `AuthProvider`.  
+`ProtectedRoute` handles the auth check and redirects unauthenticated users to the login page.
 
-### `Layout.tsx`
+## API Client (`api/client.ts`)
 
-サイドバーナビゲーションと `<Outlet>` を持つシェルコンポーネントです。  
-全ページはこの Layout の子として描画されます。  
-認証が有効な場合はサイドバー下部にログアウトボタンが表示されます。
+The axios instance uses `/api/v1` as its base URL.  
+In Docker, nginx proxies `/api/*` to the backend.
 
-```
-┌─────────┬──────────────────────────────┐
-│ sidebar │                              │
-│         │   <Outlet> (各ページ)        │
-│ nav     │                              │
-└─────────┴──────────────────────────────┘
-```
+**Interceptors:**
+- **Request**: Reads the token from `localStorage` and attaches it as an `Authorization` header
+- **Response**: On 401, removes the token and redirects to `/login`
 
-### `StatusBadge.tsx`
-
-実行ステータスを色付きバッジで表示します。
-
-| ステータス | 表示 | 色 |
-|-----------|------|-----|
-| `success` | 成功 | 緑 |
-| `failure` | 失敗 | 赤 |
-| `running` | 実行中 | 青（点滅） |
-| `timeout` | タイムアウト | オレンジ |
-
-### `LogViewer.tsx`
-
-ログ出力の表示コンポーネントです。
-
-- **NDJSON形式**のログは時刻・レベル・メッセージの構造化テーブルで表示
-- **プレーンテキスト**はそのまま `<pre>` で表示
-- `maxHeight` プロパティでスクロール領域の高さを制御
-
-## 認証フロー
-
-1. アプリ起動時に `GET /api/v1/auth/status` で認証要否を確認
-2. 認証が必要かつトークンが未保存の場合 → `/login` へリダイレクト
-3. ログイン成功後、トークンを `localStorage` に保存
-4. 以降の全 API リクエストに `Authorization: Bearer <token>` を自動付与
-5. 401 レスポンスを受け取った場合、トークンを破棄して `/login` へリダイレクト
-
-`AuthContext` はアプリ全体を `AuthProvider` でラップして提供します。  
-`ProtectedRoute` コンポーネントが認証チェックを担い、未認証の場合はログインページへ転送します。
-
-## API クライアント (`api/client.ts`)
-
-axios インスタンスのベース URL は `/api/v1` です。  
-Docker 環境では nginx が `/api/*` をバックエンドにプロキシします。
-
-**インターセプター:**
-- **リクエスト**: `localStorage` からトークンを取得し `Authorization` ヘッダーに付与
-- **レスポンス**: 401 受信時にトークン削除 + `/login` へリダイレクト
-
-### 主な関数
+### Functions
 
 ```typescript
-// 認証 (api/auth.ts)
+// Auth (api/auth.ts)
 loginApi(password)        // POST /auth/login → { token, auth_required }
 
-// サーバー
+// Servers
 getServers()
 createServer(data)
 updateServer(id, data)
 deleteServer(id)
-testServer(id)            // SSH接続テスト
+testServer(id)            // SSH connection test
 
-// ジョブ
+// Jobs
 getJobs(serverId?)
 getJob(id)
 createJob(data)
 updateJob(id, data)
 deleteJob(id)
-triggerJob(id)            // 即時実行
-toggleJob(id, enabled)   // 有効/無効切替
+triggerJob(id)            // Manual trigger
+toggleJob(id, enabled)    // Enable / disable
 
-// 実行履歴
+// Execution History
 getExecutions({ job_id?, status?, limit?, offset? })
 getExecution(id)
 
-// 設定エクスポート/インポート
+// Config export / import
 exportConfig()
 importConfig(data)
 
-// ダッシュボード集計
-getDashboardStats()       // jobs + executions を並列取得して集計
+// Dashboard aggregation
+getDashboardStats()       // Fetches jobs + executions in parallel and aggregates
 ```
 
-## 型定義 (`types/index.ts`)
+## Type Definitions (`types/index.ts`)
 
-バックエンドの Pydantic モデルと対応する TypeScript 型です。
+TypeScript types that mirror the backend Pydantic models.
 
-| 型 | 対応モデル | 説明 |
-|----|-----------|------|
-| `Server` | `ServerOut` | サーバー情報（資格情報を除く） |
-| `ServerCreate` | `ServerCreate` | サーバー作成リクエスト |
-| `Job` | `JobOut` | ジョブ情報 |
-| `JobCreate` | `JobCreate` | ジョブ作成リクエスト |
-| `ExecutionSummary` | `ExecutionSummary` | 実行履歴（ログなし） |
-| `Execution` | `ExecutionOut` | 実行詳細（stdout / parsed_result 含む） |
-| `LogEntry` | — | NDJSON 1行分のパース結果 |
+| Type | Backend Model | Description |
+|------|--------------|-------------|
+| `Server` | `ServerOut` | Server info (credentials excluded) |
+| `ServerCreate` | `ServerCreate` | Server creation request |
+| `Job` | `JobOut` | Job info |
+| `JobCreate` | `JobCreate` | Job creation request |
+| `ExecutionSummary` | `ExecutionSummary` | Execution history entry (no logs) |
+| `Execution` | `ExecutionOut` | Execution detail (includes stdout / parsed_result) |
+| `LogEntry` | — | Parsed result of a single NDJSON line |
 | `PagedResponse<T>` | `PagedResponse` | `{ items: T[], total: number }` |
 
-## ポーリング設定
+## Polling Intervals
 
-TanStack Query によるデータの自動更新間隔です。
+Auto-refresh intervals configured via TanStack Query.
 
-| ページ | 間隔 | 条件 |
-|--------|------|------|
-| ダッシュボード | 15秒 | 常時 |
-| 実行履歴一覧 | 10秒 | 常時 |
-| ジョブ詳細 | 10秒 | 常時 |
-| 実行詳細 | 3秒 | `status === 'running'` の間のみ |
+| Page | Interval | Condition |
+|------|----------|-----------|
+| Dashboard | 15 s | Always |
+| Execution History | 10 s | Always |
+| Job Detail | 10 s | Always |
+| Execution Detail | 3 s | Only while `status === 'running'` |
 
-## カスタム CSS クラス
+## Component Reference
 
-`index.css` に Tailwind コンポーネントとして定義しています。
+### `Login.tsx`
 
-| クラス | 説明 |
-|--------|------|
-| `.input` | フォーム入力フィールド共通スタイル |
-| `.btn-primary` | 主アクションボタン（インディゴ） |
-| `.btn-secondary` | 副アクションボタン（ボーダー） |
+Login screen with a password input form.  
+When locked out (HTTP 429), the remaining lock time is shown in the error message.  
+This page is never shown when authentication is disabled.
+
+### `Layout.tsx`
+
+Shell component with sidebar navigation and `<Outlet>`.  
+All pages render as children of this Layout.  
+A logout button is shown at the bottom of the sidebar when authentication is enabled.
+
+### `StatusBadge.tsx`
+
+Displays execution status as a colored badge.
+
+| Status | Label | Color |
+|--------|-------|-------|
+| `success` | Success | Green |
+| `failure` | Failure | Red |
+| `running` | Running | Blue (animated) |
+| `timeout` | Timeout | Orange |
+
+### `LogViewer.tsx`
+
+Log output display component.
+
+- **NDJSON** logs are shown as a structured table with timestamp, level, and message columns
+- **Plain text** is rendered in a `<pre>` block as-is
+- The `maxHeight` prop controls the scrollable area height
+
+## Custom CSS Classes
+
+Defined as Tailwind components in `index.css`.
+
+| Class | Description |
+|-------|-------------|
+| `.input` | Common style for form input fields |
+| `.btn-primary` | Primary action button (indigo) |
+| `.btn-secondary` | Secondary action button (border) |

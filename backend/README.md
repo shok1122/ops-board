@@ -1,230 +1,232 @@
-# OpsBoard バックエンド
+# OpsBoard Backend
 
-OpsBoard のバックエンドアプリケーションです。  
-Python / FastAPI で構築された REST API サーバーで、SSH 経由のリモートコマンド実行・ログ取得・cron スケジューリングを担います。
+The backend application for OpsBoard.  
+A REST API server built with Python / FastAPI, responsible for remote command execution over SSH, log retrieval, and cron scheduling.
 
-## 技術スタック
+## Tech Stack
 
-| ライブラリ | バージョン | 用途 |
-|-----------|-----------|------|
-| FastAPI | 0.110+ | Web フレームワーク |
-| Python | 3.12 | 実行環境 |
-| uvicorn | 0.27+ | ASGI サーバー |
-| asyncssh | 2.14+ | 非同期 SSH クライアント |
-| APScheduler | 3.x | cron スケジューラー |
-| aiosqlite | 0.20+ | 非同期 SQLite ドライバー |
-| cryptography | 42+ | SSH 資格情報の Fernet 暗号化 |
-| pydantic / pydantic-settings | 2.x | リクエスト/レスポンスの型定義・環境変数管理 |
+| Library | Version | Purpose |
+|---------|---------|---------|
+| FastAPI | 0.110+ | Web framework |
+| Python | 3.12 | Runtime |
+| uvicorn | 0.27+ | ASGI server |
+| asyncssh | 2.14+ | Async SSH client |
+| APScheduler | 3.x | Cron scheduler |
+| aiosqlite | 0.20+ | Async SQLite driver |
+| cryptography | 42+ | Fernet encryption for SSH credentials |
+| pydantic / pydantic-settings | 2.x | Request/response type definitions and env var management |
 
-## ディレクトリ構成
+## Directory Structure
 
 ```
 backend/
 ├── app/
-│   ├── main.py         # FastAPI アプリ初期化・lifespan・ルーター登録
-│   ├── config.py       # 環境変数の定義 (pydantic-settings)
-│   ├── database.py     # SQLite 初期化・スキーマ定義・セッションユーティリティ
-│   ├── models.py       # Pydantic リクエスト/レスポンスモデル
-│   ├── scheduler.py    # APScheduler 管理・ジョブ実行ロジック
-│   ├── ssh.py          # asyncssh ラッパー (コマンド実行・ファイル取得・接続テスト)
-│   ├── crypto.py       # Fernet による暗号化・復号
-│   ├── log_parser.py   # NDJSON ログパーサー（プレーンテキストフォールバックあり）
+│   ├── main.py         # FastAPI app init, lifespan, router registration
+│   ├── config.py       # Environment variable definitions (pydantic-settings)
+│   ├── database.py     # SQLite init, schema definitions, session utilities
+│   ├── models.py       # Pydantic request/response models
+│   ├── scheduler.py    # APScheduler management and job execution logic
+│   ├── ssh.py          # asyncssh wrapper (command execution, file retrieval, connection test)
+│   ├── crypto.py       # Fernet encryption and decryption
+│   ├── log_parser.py   # NDJSON log parser (with plain text fallback)
 │   └── routers/
-│       ├── auth.py         # /auth エンドポイント・require_auth 依存関数・ロックアウト管理
-│       ├── servers.py      # /servers エンドポイント
-│       ├── jobs.py         # /jobs エンドポイント
-│       ├── executions.py   # /executions エンドポイント
-│       ├── settings.py     # /settings エンドポイント
-│       └── config.py       # /config エンドポイント（エクスポート/インポート）
+│       ├── auth.py         # /auth endpoints, require_auth dependency, lockout management
+│       ├── servers.py      # /servers endpoints
+│       ├── jobs.py         # /jobs endpoints
+│       ├── executions.py   # /executions endpoints
+│       ├── settings.py     # /settings endpoints
+│       └── config.py       # /config endpoints (export / import)
 ├── pyproject.toml
 └── Dockerfile
 ```
 
-## ローカル開発
+## Local Development
 
-本番環境では `docker compose up` でまとめて起動しますが、バックエンドのコードを変更しながら開発する際はホットリロードが使える `--reload` オプション付きで直接起動すると効率的です。
+In production you start everything with `docker compose up`, but for active backend development it's more efficient to run the server directly with `--reload` for hot reloading.
 
 ```bash
 cd backend
 
-# 依存関係のインストール
-pip install -r requirements.txt
+# Install dependencies
+pip install -e .
 
-# 開発サーバー起動 (ホットリロード有効)
+# Start dev server (hot reload enabled)
 uvicorn app.main:app --reload --port 8000
 ```
 
-`http://localhost:8000` でアクセスできます。  
-Swagger UI は `http://localhost:8000/docs` で確認できます。
+Available at `http://localhost:8000`.  
+Swagger UI is at `http://localhost:8000/docs`.
 
-データベースファイルはデフォルトで `/data/opsboard.db` に作成されます。  
-ローカル開発時は環境変数で変更できます。
+The database file is created at `/data/opsboard.db` by default.  
+Override it with an environment variable during local development.
 
 ```bash
 DB_PATH=./dev.db uvicorn app.main:app --reload
 ```
 
-## 設定 (`config.py`)
+## Configuration (`config.py`)
 
-環境変数または `.env` ファイルで設定します。
+Configure via environment variables or a `.env` file.
 
-| 環境変数 | デフォルト | 説明 |
-|---------|-----------|------|
-| `DB_PATH` | `/data/opsboard.db` | SQLite データベースファイルのパス |
-| `SECRET_KEY` | `change-me-...` | SSH 資格情報の暗号化キー兼トークン署名キー。**本番では必ず変更すること** |
-| `AUTH_PASSWORD` | _(空)_ | Web UI のパスワード。設定すると認証が有効になる。空の場合は認証無効 |
-| `AUTH_MAX_ATTEMPTS` | `5` | 連続失敗でロックアウトされるまでの回数 |
-| `AUTH_LOCKOUT_MINUTES` | `15` | ロックアウト継続時間（分） |
-| `AUTH_TOKEN_EXPIRE_HOURS` | `24` | ログイントークンの有効期限（時間） |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_PATH` | `/data/opsboard.db` | Path to the SQLite database file |
+| `SECRET_KEY` | `change-me-...` | Encryption key for SSH credentials and token signing. **Must be changed in production** |
+| `AUTH_PASSWORD` | _(empty)_ | Web UI password. Enables authentication when set. Empty = auth disabled |
+| `AUTH_MAX_ATTEMPTS` | `5` | Number of consecutive failures before lockout |
+| `AUTH_LOCKOUT_MINUTES` | `15` | Lockout duration (minutes) |
+| `AUTH_TOKEN_EXPIRE_HOURS` | `24` | Login token expiry (hours) |
 
-## 認証
+## Authentication
 
-`AUTH_PASSWORD` 環境変数を設定すると全 API エンドポイント（`/health` と `/auth/*` を除く）に Bearer トークン認証が適用されます。
+Setting the `AUTH_PASSWORD` environment variable enables Bearer token authentication on all API endpoints except `/health` and `/auth/*`.
 
-### ロックアウト
+### Lockout
 
-パスワードを連続で間違えると、送信元 IP アドレスに対して一時的にアクセスが拒否されます（HTTP 429）。  
-ロック中は残り秒数がレスポンスの `detail` に含まれます。  
-ロック状態はメモリ上で管理されるため、サーバー再起動でリセットされます。
+After too many consecutive wrong passwords, the source IP address is temporarily blocked (HTTP 429).  
+The remaining lock time is included in the response `detail` field.  
+Lockout state is held in memory and resets on server restart.
 
-### トークン形式
+### Token Format
 
-外部ライブラリなしで実装した HMAC-SHA256 署名付きトークンです。  
-ペイロードに有効期限（`exp`）を含み、`SECRET_KEY` で署名します。  
-`SECRET_KEY` を変更すると既存トークンはすべて無効になります。
+Tokens are HMAC-SHA256 signed with no external dependencies.  
+The payload includes an expiry timestamp (`exp`) and is signed with `SECRET_KEY`.  
+Changing `SECRET_KEY` invalidates all existing tokens.
 
-## モジュール解説
+## Module Reference
 
 ### `database.py`
 
-SQLite の初期化・スキーマ定義・セッション管理を行います。
+Handles SQLite initialization, schema definitions, and session management.
 
-**テーブル構成:**
+**Tables:**
 
-| テーブル | 説明 |
-|---------|------|
-| `servers` | SSH 接続先情報（資格情報は暗号化して保存） |
-| `jobs` | スケジュール設定・実行対象コマンドまたはログパス |
-| `executions` | ジョブの実行履歴（stdout / stderr / パース結果を保持） |
+| Table | Description |
+|-------|-------------|
+| `servers` | SSH target information (credentials stored encrypted) |
+| `jobs` | Schedule configuration and target command or log path |
+| `executions` | Job execution history (stdout / stderr / parsed result) |
+| `server_status` | Periodic system status snapshots (CPU, memory, disk) |
+| `app_settings` | Key-value application settings |
 
-外部キー制約（`ON DELETE CASCADE`）により、サーバーを削除すると関連するジョブ・実行履歴も連鎖削除されます。  
-`get_db()` はコンテキストマネージャとして提供され、例外発生時には自動ロールバックします。
+Foreign key constraints (`ON DELETE CASCADE`) cascade-delete jobs and executions when a server is deleted.  
+`get_db()` is provided as a context manager and rolls back automatically on exception.
 
 ### `scheduler.py`
 
-APScheduler の `AsyncIOScheduler` を使い、ジョブの cron スケジューリングを管理します。
+Manages cron scheduling using APScheduler's `AsyncIOScheduler`.
 
-アプリ起動時（`lifespan`）に DB から有効なジョブを全件読み込み、スケジュールを再構築します。  
-ジョブの実行フローは以下の通りです。
+On startup (`lifespan`), all enabled jobs are loaded from the DB and schedules are rebuilt.  
+Job execution flow:
 
 ```
-スケジューラー発火
-  → executions レコードを status='running' で INSERT
-  → SSH でコマンド実行 / ログファイル取得
-  → stdout を log_parser でパース
-  → executions レコードを status='success'/'failure' で UPDATE
+Scheduler fires
+  → INSERT executions record with status='running'
+  → Execute command / retrieve log file over SSH
+  → Parse stdout with log_parser
+  → UPDATE executions record with status='success' or 'failure'
 ```
 
-手動実行（`POST /jobs/{id}/trigger`）は `asyncio.create_task` でバックグラウンド実行され、レスポンスをブロックしません。
+Manual execution (`POST /jobs/{id}/trigger`) runs in the background via `asyncio.create_task` and does not block the response.
 
 ### `ssh.py`
 
-asyncssh を薄くラップした SSH ユーティリティです。
+A thin asyncssh wrapper for SSH utilities.
 
-| 関数 | 説明 |
-|------|------|
-| `run_command()` | リモートでコマンドを実行し stdout / stderr / exit_code を返す |
-| `fetch_file()` | `tail -n 500` でログファイルの末尾を取得する（`run_command` のラッパー） |
-| `test_connection()` | `echo ok` を実行してレイテンシを計測する接続テスト |
+| Function | Description |
+|----------|-------------|
+| `run_command()` | Runs a command remotely and returns stdout / stderr / exit_code |
+| `fetch_file()` | Retrieves the tail of a log file using `tail -n 500` (wrapper around `run_command`) |
+| `test_connection()` | Runs `echo ok` to test connectivity and measure latency |
 
-パスワード認証と秘密鍵認証の両方に対応しています。  
-接続時のホスト鍵検証は省略しています（内部ネットワーク利用を前提）。
+Supports both password and private key authentication.  
+Host key verification is skipped (assumes internal network use).
 
 ### `crypto.py`
 
-SSH パスワード・秘密鍵・パスフレーズを DB に保存する前に Fernet で暗号化します。
+Encrypts SSH passwords, private keys, and passphrases with Fernet before storing them in the DB.
 
-暗号化キーは `SECRET_KEY` 環境変数から PBKDF2 (SHA-256, 100,000 iterations) で導出されます。  
-`SECRET_KEY` を変更すると既存の暗号化データが復号できなくなるため、**一度設定したら変更しないこと**。
+The encryption key is derived from the `SECRET_KEY` environment variable using PBKDF2 (SHA-256, 100,000 iterations).  
+**Do not change `SECRET_KEY` after initial setup** — doing so makes all existing encrypted data unrecoverable.
 
 ### `log_parser.py`
 
-ジョブの stdout を解析し、構造化データに変換します。
+Parses job stdout and converts it to structured data.
 
-- 各行が JSON オブジェクトであれば NDJSON として処理
-- フィールド名のエイリアスを正規化（例: `timestamp` → `ts`、`message` → `msg`）
-- JSON 行が全体の半分未満の場合はプレーンテキストとして扱い、行ごとに `{"level": "RAW", "msg": "..."}` に変換
+- Lines that are JSON objects are processed as NDJSON
+- Field name aliases are normalized (e.g. `timestamp` → `ts`, `message` → `msg`)
+- If fewer than half the lines are valid JSON, the output is treated as plain text and each line is converted to `{"level": "RAW", "msg": "..."}`
 
 ### `models.py`
 
-Pydantic による API リクエスト・レスポンスのモデル定義です。
+Pydantic model definitions for API requests and responses.
 
-| モデル | 用途 |
-|--------|------|
-| `ServerCreate` / `ServerUpdate` | サーバー登録・更新リクエスト |
-| `ServerOut` | サーバー情報レスポンス（資格情報を除外） |
-| `JobCreate` / `JobUpdate` | ジョブ登録・更新リクエスト |
-| `JobOut` | ジョブ情報レスポンス（サーバー名を JOIN して付加） |
-| `ExecutionOut` | 実行詳細レスポンス（stdout / parsed_result 含む） |
-| `ExecutionSummary` | 実行一覧用レスポンス（ログなし・軽量） |
-| `PagedResponse` | `{ items: [...], total: N }` の汎用ページネーション型 |
+| Model | Purpose |
+|-------|---------|
+| `ServerCreate` / `ServerUpdate` | Server registration and update requests |
+| `ServerOut` | Server info response (credentials excluded) |
+| `JobCreate` / `JobUpdate` | Job registration and update requests |
+| `JobOut` | Job info response (server name joined) |
+| `ExecutionOut` | Execution detail response (includes stdout / parsed_result) |
+| `ExecutionSummary` | Execution list response (no logs, lightweight) |
+| `PagedResponse` | Generic pagination type `{ items: [...], total: N }` |
 
-## API エンドポイント
+## API Endpoints
 
-全ルートのプレフィックスは `/api/v1` です。
-
-```
-# 認証（認証不要）
-POST   /auth/login               ログイン・トークン取得 (429: ロックアウト中)
-GET    /auth/status              認証要否の確認 {"auth_required": bool}
-
-# サーバー管理
-GET    /servers                  一覧取得
-POST   /servers                  作成
-GET    /servers/{id}             取得
-PUT    /servers/{id}             更新
-DELETE /servers/{id}             削除
-POST   /servers/{id}/test        SSH 接続テスト
-
-# ジョブ管理
-GET    /jobs                     一覧取得 (?server_id= でフィルタ可)
-POST   /jobs                     作成
-GET    /jobs/{id}                取得
-PUT    /jobs/{id}                更新
-DELETE /jobs/{id}                削除
-POST   /jobs/{id}/trigger        手動実行 (202 Accepted / バックグラウンド実行)
-PATCH  /jobs/{id}/enable         有効/無効切替 (?enabled=true|false)
-
-# 実行履歴
-GET    /executions               一覧取得 (?job_id= / ?status= / ?limit= / ?offset=)
-GET    /executions/{id}          詳細取得 (stdout / parsed_result 含む)
-DELETE /executions/{id}          削除
-
-# 設定
-GET    /settings                 アプリ設定取得
-PUT    /settings                 アプリ設定更新
-
-# 設定エクスポート/インポート
-GET    /config/export            全設定を JSON でエクスポート
-POST   /config/import            JSON から全設定をインポート（既存データは置換）
-
-# スケジューラー
-GET    /scheduler/status         実行中ジョブ数・次回実行時刻の一覧
-POST   /scheduler/reload         DB から全ジョブを再読み込み
-
-# システム
-GET    /health                   ヘルスチェック
-```
-
-## アプリ起動フロー
+All routes are prefixed with `/api/v1`.
 
 ```
-uvicorn 起動
-  → lifespan 開始
-      → init_db()        スキーマ作成 (CREATE TABLE IF NOT EXISTS)
-      → scheduler.start() APScheduler 開始
-      → reload_all_jobs() DB から enabled=1 のジョブを全件スケジュール登録
-  → リクエスト受付
-  → lifespan 終了
+# Authentication (no auth required)
+POST   /auth/login               Login and obtain token (429: locked out)
+GET    /auth/status              Check whether auth is required {"auth_required": bool}
+
+# Servers
+GET    /servers                  List
+POST   /servers                  Create
+GET    /servers/{id}             Get
+PUT    /servers/{id}             Update
+DELETE /servers/{id}             Delete
+POST   /servers/{id}/test        SSH connection test
+
+# Jobs
+GET    /jobs                     List (filterable with ?server_id=)
+POST   /jobs                     Create
+GET    /jobs/{id}                Get
+PUT    /jobs/{id}                Update
+DELETE /jobs/{id}                Delete
+POST   /jobs/{id}/trigger        Manual trigger (202 Accepted, background execution)
+PATCH  /jobs/{id}/enable         Enable / disable (?enabled=true|false)
+
+# Execution History
+GET    /executions               List (?job_id= / ?status= / ?limit= / ?offset=)
+GET    /executions/{id}          Get detail (includes stdout / parsed_result)
+DELETE /executions/{id}          Delete
+
+# Settings
+GET    /settings                 Get app settings
+PUT    /settings                 Update app settings
+
+# Config Export / Import
+GET    /config/export            Export all config as JSON
+POST   /config/import            Import config from JSON (replaces existing data)
+
+# Scheduler
+GET    /scheduler/status         Running job count and next fire times
+POST   /scheduler/reload         Reload all jobs from DB
+
+# System
+GET    /health                   Health check
+```
+
+## Application Startup Flow
+
+```
+uvicorn starts
+  → lifespan begins
+      → init_db()         Create schema (CREATE TABLE IF NOT EXISTS)
+      → scheduler.start() Start APScheduler
+      → reload_all_jobs() Schedule all enabled=1 jobs from DB
+  → Accept requests
+  → lifespan ends
       → scheduler.shutdown()
 ```
