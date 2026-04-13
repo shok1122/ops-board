@@ -323,6 +323,75 @@ async def _cleanup_stale_executions():
             logger.error("Error cleaning up stale execution %s: %s", row["id"], exc)
 
 
+async def _collect_monitor(monitor_id: str):
+    """Collect a metric for a monitor and store the result in monitor_data."""
+    import json as _json
+    from app.crypto import decrypt
+    from app.ssh import collect_metric
+
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT m.*, s.host, s.port, s.username, s.auth_type, "
+            "s.password_enc, s.private_key_enc, s.passphrase_enc "
+            "FROM monitors m JOIN servers s ON m.server_id = s.id WHERE m.id = ?",
+            (monitor_id,),
+        )
+        monitor = await cur.fetchone()
+
+    if not monitor:
+        logger.warning("Monitor %s not found; skipping collection", monitor_id)
+        return
+
+    password = decrypt(monitor["password_enc"]) if monitor["password_enc"] else None
+    private_key = decrypt(monitor["private_key_enc"]) if monitor["private_key_enc"] else None
+    passphrase = decrypt(monitor["passphrase_enc"]) if monitor["passphrase_enc"] else None
+    builtin_config = _json.loads(monitor["builtin_config"]) if monitor["builtin_config"] else None
+
+    try:
+        value, error = await collect_metric(
+            monitor["host"], monitor["port"], monitor["username"],
+            metric_type=monitor["metric_type"],
+            builtin_key=monitor["builtin_key"],
+            builtin_config=builtin_config,
+            custom_script=monitor["custom_script"],
+            password=password, private_key=private_key, passphrase=passphrase,
+        )
+    except Exception as exc:
+        value, error = None, str(exc)
+
+    now = now_iso()
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO monitor_data (id, monitor_id, collected_at, value, error, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (new_id(), monitor_id, now, value, error, now),
+        )
+        await db.commit()
+    logger.debug("Monitor %s collected value=%s error=%s", monitor_id, value, error)
+
+
+def schedule_monitor(monitor_id: str, interval_minutes: int):
+    from apscheduler.triggers.interval import IntervalTrigger
+    job_id = f"monitor_{monitor_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+    scheduler.add_job(
+        _collect_monitor,
+        trigger=IntervalTrigger(minutes=interval_minutes),
+        id=job_id,
+        args=[monitor_id],
+        replace_existing=True,
+        misfire_grace_time=60,
+    )
+    logger.info("Scheduled monitor %s every %d minutes", monitor_id, interval_minutes)
+
+
+def unschedule_monitor(monitor_id: str):
+    job_id = f"monitor_{monitor_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+
+
 async def _auto_check_all_servers():
     """Periodically collect system status for all registered servers."""
     from app.crypto import decrypt
@@ -416,6 +485,16 @@ async def reload_all_jobs():
         setting = await cur.fetchone()
     interval = int(setting["value"]) if setting else 10
     schedule_status_check(interval)
+
+    # Load enabled monitors
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT id, interval_minutes FROM monitors WHERE enabled = 1"
+        )
+        monitor_rows = await cur.fetchall()
+    for mrow in monitor_rows:
+        schedule_monitor(mrow["id"], mrow["interval_minutes"])
+    logger.info("Reloaded %d monitors from DB", len(monitor_rows))
 
     logger.info("Reloaded %d jobs from DB", len(rows))
 

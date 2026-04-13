@@ -4,6 +4,7 @@ import type {
   Job, JobCreate,
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
+  Monitor, MonitorCreate, MonitorDataPoint, BuiltinMetricDef,
 } from '../types'
 
 const TOKEN_KEY = 'opsboard_token'
@@ -114,6 +115,33 @@ export const getAppSettings = () =>
 
 export const updateAppSettings = (data: AppSettings) =>
   api.put<AppSettings>('/settings', data).then(r => r.data)
+
+// Monitors
+export const getMonitors = (serverId?: string) =>
+  api.get<Monitor[]>('/monitors', {
+    params: serverId ? { server_id: serverId } : undefined,
+  }).then(r => r.data)
+
+export const createMonitor = (data: MonitorCreate) =>
+  api.post<Monitor>('/monitors', data).then(r => r.data)
+
+export const updateMonitor = (id: string, data: Partial<MonitorCreate>) =>
+  api.put<Monitor>(`/monitors/${id}`, data).then(r => r.data)
+
+export const deleteMonitor = (id: string) =>
+  api.delete(`/monitors/${id}`)
+
+export const toggleMonitor = (id: string, enabled: boolean) =>
+  api.patch<Monitor>(`/monitors/${id}/enable`, null, { params: { enabled } }).then(r => r.data)
+
+export const triggerMonitor = (id: string) =>
+  api.post(`/monitors/${id}/trigger`).then(r => r.data)
+
+export const getMonitorData = (id: string, hours = 24, limit = 500) =>
+  api.get<MonitorDataPoint[]>(`/monitors/${id}/data`, { params: { hours, limit } }).then(r => r.data)
+
+export const getBuiltinMetrics = () =>
+  api.get<BuiltinMetricDef[]>('/monitors/builtin-metrics/list').then(r => r.data)
 
 // Dashboard stats (derived from existing endpoints)
 export const getDashboardStats = async () => {

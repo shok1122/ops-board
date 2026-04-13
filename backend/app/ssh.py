@@ -136,6 +136,59 @@ async def get_system_status(
     }
 
 
+BUILTIN_METRIC_COMMANDS: dict[str, str] = {
+    "cpu_load_1m":   "awk '{print $1}' /proc/loadavg",
+    "cpu_load_5m":   "awk '{print $2}' /proc/loadavg",
+    "cpu_load_15m":  "awk '{print $3}' /proc/loadavg",
+    "mem_used_pct":  "free | awk '/^Mem:/{{printf \"%.1f\", $3/$2*100}}'",
+    "mem_used_mb":   "free | awk '/^Mem:/{{print $3}}'",
+    "disk_used_pct": "df {path} | awk 'NR==2{{print $5}}' | tr -d '%'",
+    "disk_used_gb":  "df -BG {path} | awk 'NR==2{{gsub(/G/,\"\"); print $3}}'",
+    "process_count": "ps aux | wc -l",
+}
+
+
+async def collect_metric(
+    host: str,
+    port: int,
+    username: str,
+    metric_type: str,
+    builtin_key: Optional[str] = None,
+    builtin_config: Optional[dict] = None,
+    custom_script: Optional[str] = None,
+    password: Optional[str] = None,
+    private_key: Optional[str] = None,
+    passphrase: Optional[str] = None,
+    timeout: float = 15.0,
+) -> tuple[Optional[float], Optional[str]]:
+    """Collect a single metric value via SSH. Returns (value, error)."""
+    if metric_type == "builtin":
+        if not builtin_key or builtin_key not in BUILTIN_METRIC_COMMANDS:
+            return None, f"Unknown builtin metric key: {builtin_key}"
+        template = BUILTIN_METRIC_COMMANDS[builtin_key]
+        config = {**(builtin_config or {})}
+        config.setdefault("path", "/")
+        command = template.format(**config)
+    else:
+        if not custom_script:
+            return None, "No custom script provided"
+        command = custom_script
+
+    result = await run_command(
+        host, port, username, command,
+        password=password, private_key=private_key, passphrase=passphrase,
+        timeout=timeout,
+    )
+    if result.exit_code != 0:
+        error = result.stderr.strip() or f"Exit code {result.exit_code}"
+        return None, error
+    try:
+        value = float(result.stdout.strip())
+        return value, None
+    except (ValueError, TypeError):
+        return None, f"Could not parse output as number: {result.stdout.strip()[:100]}"
+
+
 async def test_connection(
     host: str,
     port: int,

@@ -165,6 +165,77 @@ class ServerJobResult(BaseModel):
     raw_stdout: Optional[str] = None
 
 
+# ── Monitors ─────────────────────────────────────────────────────────────────
+
+BUILTIN_METRIC_KEYS = [
+    "cpu_load_1m",
+    "cpu_load_5m",
+    "cpu_load_15m",
+    "mem_used_pct",
+    "mem_used_mb",
+    "disk_used_pct",
+    "disk_used_gb",
+    "process_count",
+]
+
+
+class MonitorCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    server_id: str
+    interval_minutes: int = Field(default=5, ge=1, le=1440)
+    enabled: bool = True
+    metric_type: Literal["builtin", "custom"] = "builtin"
+    builtin_key: Optional[str] = None
+    builtin_config: Optional[dict] = None
+    custom_script: Optional[str] = None
+    unit: Optional[str] = None
+    warning_threshold: Optional[float] = None
+    critical_threshold: Optional[float] = None
+
+
+class MonitorUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    server_id: Optional[str] = None
+    interval_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    enabled: Optional[bool] = None
+    metric_type: Optional[Literal["builtin", "custom"]] = None
+    builtin_key: Optional[str] = None
+    builtin_config: Optional[dict] = None
+    custom_script: Optional[str] = None
+    unit: Optional[str] = None
+    warning_threshold: Optional[float] = None
+    critical_threshold: Optional[float] = None
+
+
+class MonitorOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    server_id: str
+    server_name: Optional[str] = None
+    interval_minutes: int
+    enabled: bool
+    metric_type: str
+    builtin_key: Optional[str]
+    builtin_config: Optional[dict]
+    custom_script: Optional[str]
+    unit: Optional[str]
+    warning_threshold: Optional[float]
+    critical_threshold: Optional[float]
+    created_at: str
+    updated_at: str
+
+
+class MonitorDataPoint(BaseModel):
+    id: str
+    monitor_id: str
+    collected_at: str
+    value: Optional[float] = None
+    error: Optional[str] = None
+
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 class PagedResponse(BaseModel):

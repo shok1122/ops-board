@@ -71,6 +71,33 @@ CREATE TABLE IF NOT EXISTS server_status (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS monitors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    interval_minutes INTEGER NOT NULL DEFAULT 5,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    metric_type TEXT NOT NULL DEFAULT 'builtin',
+    builtin_key TEXT,
+    builtin_config TEXT,
+    custom_script TEXT,
+    unit TEXT,
+    warning_threshold REAL,
+    critical_threshold REAL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS monitor_data (
+    id TEXT PRIMARY KEY,
+    monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+    collected_at TEXT NOT NULL,
+    value REAL,
+    error TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

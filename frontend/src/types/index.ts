@@ -124,6 +124,58 @@ export interface JobResultOutput {
   items?: JobResultItem[]
 }
 
+// ── Monitors ─────────────────────────────────────────────────────────────────
+
+export type MonitorMetricType = 'builtin' | 'custom'
+
+export type BuiltinMetricKey =
+  | 'cpu_load_1m'
+  | 'cpu_load_5m'
+  | 'cpu_load_15m'
+  | 'mem_used_pct'
+  | 'mem_used_mb'
+  | 'disk_used_pct'
+  | 'disk_used_gb'
+  | 'process_count'
+
+export interface BuiltinMetricDef {
+  key: BuiltinMetricKey
+  label: string
+  unit: string
+  configurable: boolean
+  config_fields?: { key: string; label: string; default: string }[]
+}
+
+export interface MonitorCreate {
+  name: string
+  description?: string
+  server_id: string
+  interval_minutes: number
+  enabled: boolean
+  metric_type: MonitorMetricType
+  builtin_key?: BuiltinMetricKey
+  builtin_config?: Record<string, string>
+  custom_script?: string
+  unit?: string
+  warning_threshold?: number
+  critical_threshold?: number
+}
+
+export interface Monitor extends MonitorCreate {
+  id: string
+  server_name?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MonitorDataPoint {
+  id: string
+  monitor_id: string
+  collected_at: string
+  value?: number
+  error?: string
+}
+
 export interface ServerJobResult {
   job_id: string
   job_name: string
