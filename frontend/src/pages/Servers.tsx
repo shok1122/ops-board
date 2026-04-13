@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle, Settings } from 'lucide-react'
+import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import {
   getServers, createServer, updateServer, deleteServer, testServer,
-  checkServerStatus, getAllLatestStatuses, getServerStatusHistory,
-  getServerJobResults, getAppSettings, updateAppSettings,
+  checkServerStatus, getAllLatestStatuses,
+  getServerJobResults,
   getMonitors, getMonitorData,
 } from '../api/client'
 import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, MonitorDataPoint } from '../types'
@@ -27,39 +27,6 @@ function formatUptime(seconds: number): string {
   return `${m}分`
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function ServerHistoryCharts({ serverId }: { serverId: string }) {
-  const { data: history } = useQuery({
-    queryKey: ['server-status-history', serverId],
-    queryFn: () => getServerStatusHistory(serverId, 48),
-    refetchInterval: 60_000,
-  })
-
-  if (!history || history.length < 2) return null
-
-  const chartData = history.map(h => ({
-    time: formatTime(h.checked_at),
-    cpu: h.cpu_load_1m != null ? Number(h.cpu_load_1m.toFixed(2)) : null,
-    memPct: h.mem_total_mb && h.mem_used_mb
-      ? Math.round((h.mem_used_mb / h.mem_total_mb) * 100)
-      : null,
-    diskPct: h.disk_total_gb && h.disk_used_gb
-      ? Math.round((h.disk_used_gb / h.disk_total_gb) * 100)
-      : null,
-  }))
-
-  return (
-    <div className="grid grid-cols-3 gap-4 mt-3">
-      <MiniChart data={chartData} dataKey="cpu" label="CPU負荷 (1分)" color="#6366f1" unit="" />
-      <MiniChart data={chartData} dataKey="memPct" label="メモリ使用率" color="#10b981" unit="%" warnAt={80} />
-      <MiniChart data={chartData} dataKey="diskPct" label="ディスク使用率" color="#f59e0b" unit="%" warnAt={80} />
-    </div>
-  )
-}
 
 function MiniChart({
   data, dataKey, label, color, unit, warnAt,
@@ -224,15 +191,10 @@ export default function Servers() {
   const [form, setForm] = useState<ServerCreate>(emptyForm)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms?: number; error?: string; testing: boolean }>>({})
   const [statusData, setStatusData] = useState<Record<string, { loading: boolean; data?: ServerStatus }>>({})
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [intervalInput, setIntervalInput] = useState<number>(10)
-
-  const { data: appSettings } = useQuery({ queryKey: ['app-settings'], queryFn: getAppSettings })
-
   const { data: latestStatuses } = useQuery({
     queryKey: ['server-statuses'],
     queryFn: getAllLatestStatuses,
-    refetchInterval: (appSettings?.status_check_interval_minutes ?? 10) * 60 * 1000 || false,
+    refetchInterval: 600_000,
   })
 
   useEffect(() => {
@@ -258,11 +220,6 @@ export default function Servers() {
     mutationFn: deleteServer,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['servers'] }),
   })
-  const settingsMut = useMutation({
-    mutationFn: updateAppSettings,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['app-settings'] }); setSettingsOpen(false) },
-  })
-
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
     setForm({ name: s.name, host: s.host, port: s.port, username: s.username, auth_type: s.auth_type })
@@ -285,7 +242,7 @@ export default function Servers() {
     try {
       const res = await checkServerStatus(id)
       setStatusData(s => ({ ...s, [id]: { loading: false, data: res } }))
-      qc.invalidateQueries({ queryKey: ['server-status-history', id] })
+
     } catch {
       setStatusData(s => ({ ...s, [id]: { loading: false, data: { id: '', server_id: id, checked_at: '', error: '取得失敗' } } }))
     }
@@ -304,25 +261,12 @@ export default function Servers() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">サーバー管理</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setIntervalInput(appSettings?.status_check_interval_minutes ?? 10); setSettingsOpen(true) }}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <Settings className="h-4 w-4" />
-            {appSettings
-              ? appSettings.status_check_interval_minutes === 0
-                ? '自動確認: 無効'
-                : `自動確認: ${appSettings.status_check_interval_minutes}分ごと`
-              : '設定'}
-          </button>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            <Plus className="h-4 w-4" /> サーバー追加
-          </button>
-        </div>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          <Plus className="h-4 w-4" /> サーバー追加
+        </button>
       </div>
 
       {isLoading ? (
@@ -393,10 +337,9 @@ export default function Servers() {
                   ) : ss?.data ? (
                     <>
                       <StatusSummary status={ss.data} />
-                      <ServerHistoryCharts serverId={s.id} />
                     </>
                   ) : (
-                    <p className="text-xs text-gray-400">「今すぐ確認」を押すか、自動確認を有効にすると状態が表示されます。</p>
+                    <p className="text-xs text-gray-400">「今すぐ確認」を押すと状態が表示されます。</p>
                   )}
                   <ServerMonitorCharts serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
@@ -404,38 +347,6 @@ export default function Servers() {
               </div>
             )
           })}
-        </div>
-      )}
-
-      {/* Settings Modal */}
-      {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="font-semibold text-gray-900">状態確認の設定</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <Field label="自動確認の間隔（分）">
-                <input
-                  type="number" min={0} max={1440}
-                  value={intervalInput}
-                  onChange={e => setIntervalInput(Number(e.target.value))}
-                  className="input"
-                />
-                <p className="mt-1 text-xs text-gray-400">0 を設定すると自動確認を無効にします</p>
-              </Field>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setSettingsOpen(false)} className="btn-secondary">キャンセル</button>
-                <button
-                  onClick={() => settingsMut.mutate({ status_check_interval_minutes: intervalInput })}
-                  disabled={settingsMut.isPending}
-                  className="btn-primary"
-                >
-                  {settingsMut.isPending ? '保存中…' : '保存'}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

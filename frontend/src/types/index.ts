@@ -124,6 +124,23 @@ export interface JobResultOutput {
   items?: JobResultItem[]
 }
 
+// ── Job Templates ────────────────────────────────────────────────────────────
+
+export type TemplateLanguage = 'bash' | 'ruby' | 'python'
+
+export interface JobTemplate {
+  id: string
+  name: string
+  description: string
+  category: string
+  language: TemplateLanguage
+  script: string
+  command: string        // heredoc-wrapped, ready for SSH execution
+  default_cron: string
+  default_timeout: number
+  tags: string[]
+}
+
 // ── Monitors ─────────────────────────────────────────────────────────────────
 
 export type MonitorMetricType = 'builtin' | 'custom'

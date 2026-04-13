@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.scheduler import scheduler, reload_all_jobs, get_scheduler_status
-from app.routers import servers, jobs, executions, settings, config, monitors
+from app.routers import servers, jobs, executions, settings, config, monitors, job_templates
 from app.routers.auth import router as auth_router, require_auth
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +41,7 @@ app.include_router(executions.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(settings.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(config.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(monitors.router, prefix="/api/v1", dependencies=_auth)
+app.include_router(job_templates.router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/api/v1/health")

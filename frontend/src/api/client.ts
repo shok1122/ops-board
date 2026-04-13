@@ -5,6 +5,7 @@ import type {
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
   Monitor, MonitorCreate, MonitorDataPoint, BuiltinMetricDef,
+  JobTemplate,
 } from '../types'
 
 const TOKEN_KEY = 'opsboard_token'
@@ -142,6 +143,10 @@ export const getMonitorData = (id: string, hours = 24, limit = 500) =>
 
 export const getBuiltinMetrics = () =>
   api.get<BuiltinMetricDef[]>('/monitors/builtin-metrics/list').then(r => r.data)
+
+// Job Templates
+export const getJobTemplates = () =>
+  api.get<JobTemplate[]>('/job-templates').then(r => r.data)
 
 // Dashboard stats (derived from existing endpoints)
 export const getDashboardStats = async () => {
