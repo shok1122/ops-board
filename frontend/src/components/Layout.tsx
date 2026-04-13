@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle,
+  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle, LogOut,
 } from 'lucide-react'
 import { exportConfig, importConfig } from '../api/client'
 import { useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../contexts/AuthContext'
 
 const nav = [
   { to: '/', label: 'ダッシュボード', icon: LayoutDashboard },
@@ -18,6 +19,13 @@ export default function Layout() {
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { authRequired, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   const doExport = async () => {
     setExportModalOpen(false)
@@ -107,6 +115,15 @@ export default function Layout() {
             インポート
           </button>
           <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileSelect} />
+          {authRequired && (
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              ログアウト
+            </button>
+          )}
           <div className="px-2 pt-2 text-xs text-gray-500">v1.0.0</div>
         </div>
       </aside>

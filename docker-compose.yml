@@ -5,6 +5,10 @@ services:
     environment:
       - DB_PATH=/data/opsboard.db
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-32bytes!!!}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-}
+      - AUTH_MAX_ATTEMPTS=${AUTH_MAX_ATTEMPTS:-5}
+      - AUTH_LOCKOUT_MINUTES=${AUTH_LOCKOUT_MINUTES:-15}
+      - AUTH_TOKEN_EXPIRE_HOURS=${AUTH_TOKEN_EXPIRE_HOURS:-24}
     volumes:
       - backend-data:/data
     networks:

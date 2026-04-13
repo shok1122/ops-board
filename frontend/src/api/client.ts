@@ -6,7 +6,30 @@ import type {
   PagedResponse, AppSettings,
 } from '../types'
 
+const TOKEN_KEY = 'opsboard_token'
+
 const api = axios.create({ baseURL: '/api/v1' })
+
+// リクエストに Bearer トークンを付与
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// 401 レスポンスでトークンを破棄してログインページへリダイレクト
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem(TOKEN_KEY)
+      window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  },
+)
 
 // Servers
 export const getServers = () =>
