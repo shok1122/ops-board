@@ -27,17 +27,22 @@ frontend/
 │   ├── index.css           # グローバルスタイル・Tailwind utilities
 │   │
 │   ├── api/
-│   │   └── client.ts       # axios インスタンス + API 関数一覧
+│   │   ├── client.ts       # axios インスタンス + API 関数一覧・認証インターセプター
+│   │   └── auth.ts         # ログイン API 関数
+│   │
+│   ├── contexts/
+│   │   └── AuthContext.tsx # 認証状態管理 (トークン・ログイン/ログアウト)
 │   │
 │   ├── types/
 │   │   └── index.ts        # TypeScript 型定義 (バックエンド Pydantic モデルと対応)
 │   │
 │   ├── components/         # 再利用コンポーネント
-│   │   ├── Layout.tsx      # サイドバーナビゲーション + Outlet
+│   │   ├── Layout.tsx      # サイドバーナビゲーション + Outlet + ログアウトボタン
 │   │   ├── StatusBadge.tsx # 実行ステータスのバッジ (success / failure / running / timeout)
 │   │   └── LogViewer.tsx   # ログ表示 (NDJSON テーブル / RAW テキスト)
 │   │
 │   └── pages/              # ページコンポーネント
+│       ├── Login.tsx           # ログイン画面
 │       ├── Dashboard.tsx       # サマリーカード + 最近の実行一覧
 │       ├── Servers.tsx         # サーバー管理 (CRUD + 接続テスト)
 │       ├── Jobs.tsx            # ジョブ管理 (CRUD + 即時実行 + 有効/無効)
@@ -92,10 +97,17 @@ npm run build
 
 ## コンポーネント解説
 
+### `Login.tsx`
+
+パスワード入力フォームを持つログイン画面です。  
+ロックアウト中（HTTP 429）は残り時間をエラーメッセージとして表示します。  
+認証が無効な環境ではこのページには遷移しません。
+
 ### `Layout.tsx`
 
 サイドバーナビゲーションと `<Outlet>` を持つシェルコンポーネントです。  
-全ページはこの Layout の子として描画されます。
+全ページはこの Layout の子として描画されます。  
+認証が有効な場合はサイドバー下部にログアウトボタンが表示されます。
 
 ```
 ┌─────────┬──────────────────────────────┐
@@ -124,14 +136,32 @@ npm run build
 - **プレーンテキスト**はそのまま `<pre>` で表示
 - `maxHeight` プロパティでスクロール領域の高さを制御
 
+## 認証フロー
+
+1. アプリ起動時に `GET /api/v1/auth/status` で認証要否を確認
+2. 認証が必要かつトークンが未保存の場合 → `/login` へリダイレクト
+3. ログイン成功後、トークンを `localStorage` に保存
+4. 以降の全 API リクエストに `Authorization: Bearer <token>` を自動付与
+5. 401 レスポンスを受け取った場合、トークンを破棄して `/login` へリダイレクト
+
+`AuthContext` はアプリ全体を `AuthProvider` でラップして提供します。  
+`ProtectedRoute` コンポーネントが認証チェックを担い、未認証の場合はログインページへ転送します。
+
 ## API クライアント (`api/client.ts`)
 
 axios インスタンスのベース URL は `/api/v1` です。  
 Docker 環境では nginx が `/api/*` をバックエンドにプロキシします。
 
+**インターセプター:**
+- **リクエスト**: `localStorage` からトークンを取得し `Authorization` ヘッダーに付与
+- **レスポンス**: 401 受信時にトークン削除 + `/login` へリダイレクト
+
 ### 主な関数
 
 ```typescript
+// 認証 (api/auth.ts)
+loginApi(password)        // POST /auth/login → { token, auth_required }
+
 // サーバー
 getServers()
 createServer(data)
@@ -151,6 +181,10 @@ toggleJob(id, enabled)   // 有効/無効切替
 // 実行履歴
 getExecutions({ job_id?, status?, limit?, offset? })
 getExecution(id)
+
+// 設定エクスポート/インポート
+exportConfig()
+importConfig(data)
 
 // ダッシュボード集計
 getDashboardStats()       // jobs + executions を並列取得して集計

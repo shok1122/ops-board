@@ -13,12 +13,14 @@ SSH経由でコマンドを実行・ログを収集し、実行結果をブラ�
 
 | 機能 | 詳細 |
 |------|------|
+| パスワード認証 | Web UI へのアクセスをパスワードで保護。連続失敗時のロックアウトあり |
 | サーバー管理 | SSH接続先の登録・編集・削除。パスワード / 秘密鍵の両認証に対応。接続テストボタンあり |
 | ジョブ管理 | cron式でスケジュールを設定。**コマンド実行**と**ログファイル取得**の2種類 |
 | 手動実行 | ジョブをいつでもワンクリックで即時実行 |
 | 実行履歴 | 全実行結果を一覧表示。ステータスでフィルタリング可能 |
 | ログビューア | NDJSON形式は構造化テーブル表示。プレーンテキストはそのまま表示 |
 | ダッシュボード | 成功率・失敗数などのサマリーと最近の実行一覧 |
+| 設定エクスポート / インポート | サーバー・ジョブ設定をJSONファイルで持ち運び可能 |
 
 ## 起動方法
 
@@ -36,7 +38,7 @@ cd ops-board
 # 2. 環境変数ファイルを作成
 cp .env.example .env
 
-# 3. .env の SECRET_KEY を必ず変更する（SSH資格情報の暗号化キー）
+# 3. .env を編集（SECRET_KEY と AUTH_PASSWORD を必ず設定）
 vi .env
 
 # 4. ビルドして起動
@@ -74,6 +76,42 @@ PORT=8080
 |------|-----------|------|
 | `SECRET_KEY` | `change-me-...` | SSH資格情報の暗号化キー。**本番では必ず変更すること** |
 | `PORT` | `3000` | ホスト側に公開するポート番号 |
+| `AUTH_PASSWORD` | _(空)_ | Web UIのパスワード。**設定推奨**。空の場合は認証無効 |
+| `AUTH_MAX_ATTEMPTS` | `5` | この回数連続で失敗するとロックアウト |
+| `AUTH_LOCKOUT_MINUTES` | `15` | ロックアウト継続時間（分） |
+| `AUTH_TOKEN_EXPIRE_HOURS` | `24` | ログイン後のトークン有効期限（時間） |
+
+## 認証
+
+`AUTH_PASSWORD` を設定すると Web UI へのアクセスにパスワードが必要になります。
+
+```env
+AUTH_PASSWORD=your-secret-password
+```
+
+### ロックアウト
+
+パスワードを連続で間違えると、送信元 IP アドレスに対して一時的にアクセスが拒否されます。
+
+- デフォルトは **5回失敗で15分ロック**
+- `AUTH_MAX_ATTEMPTS` / `AUTH_LOCKOUT_MINUTES` で変更可能
+- ロック中は残り秒数がエラーメッセージに表示されます
+
+認証が不要な環境（開発環境など）は `AUTH_PASSWORD` を空のままにしてください。
+
+### API アクセス
+
+認証が有効なときは API リクエストにも Bearer トークンが必要です。
+
+```bash
+# 1. ログインしてトークンを取得
+TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"your-secret-password"}' | jq -r .token)
+
+# 2. トークンを付けてリクエスト
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/v1/servers
+```
 
 ## ログ形式
 
@@ -146,19 +184,20 @@ rsync -a /data/ /backup/ && log INFO "完了" || log ERROR "失敗"
 
 ### データ永続化
 
-SQLiteデータベース (`/data/opsboard.db`) は Docker Volume `ops-board-data` に保存されます。  
+SQLiteデータベース (`/data/opsboard.db`) は Docker Volume `backend-data` に保存されます。  
 バックアップはこのファイルを取得するだけで完了です。
 
 ```bash
-docker run --rm -v ops-board_ops-board-data:/data -v $(pwd):/backup \
+docker run --rm -v ops-board_backend-data:/data -v $(pwd):/backup \
   alpine cp /data/opsboard.db /backup/opsboard_backup.db
 ```
 
 ### セキュリティに関する注意
 
 - SSH パスワード・秘密鍵は Fernet 暗号化してDBに保存されます
+- Web UI は `AUTH_PASSWORD` によるパスワード認証で保護できます
 - SSH接続はホスト鍵検証を省略しています（内部ネットワーク利用を前提）
-- 本番環境では `SECRET_KEY` を十分強力な値に変更してください
+- 本番環境では `SECRET_KEY` と `AUTH_PASSWORD` を必ず設定してください
 - HTTPS化する場合はnginxの前段にリバースプロキシを置いてください
 
 ## API
@@ -166,6 +205,9 @@ docker run --rm -v ops-board_ops-board-data:/data -v $(pwd):/backup \
 バックエンドは REST API を提供します。
 
 ```
+POST   /api/v1/auth/login            ログイン（トークン取得）
+GET    /api/v1/auth/status           認証要否の確認（公開）
+
 GET    /api/v1/servers              サーバー一覧
 POST   /api/v1/servers              サーバー作成
 PUT    /api/v1/servers/{id}         サーバー更新
@@ -181,6 +223,9 @@ PATCH  /api/v1/jobs/{id}/enable     有効/無効切替
 
 GET    /api/v1/executions           実行履歴一覧
 GET    /api/v1/executions/{id}      実行詳細（ログ含む）
+
+GET    /api/v1/config/export        設定エクスポート
+POST   /api/v1/config/import        設定インポート
 
 GET    /api/v1/scheduler/status     スケジューラー状態
 POST   /api/v1/scheduler/reload     スケジューラー再読込

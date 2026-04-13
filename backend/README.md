@@ -30,10 +30,13 @@ backend/
 │   ├── crypto.py       # Fernet による暗号化・復号
 │   ├── log_parser.py   # NDJSON ログパーサー（プレーンテキストフォールバックあり）
 │   └── routers/
+│       ├── auth.py         # /auth エンドポイント・require_auth 依存関数・ロックアウト管理
 │       ├── servers.py      # /servers エンドポイント
 │       ├── jobs.py         # /jobs エンドポイント
-│       └── executions.py   # /executions エンドポイント
-├── requirements.txt
+│       ├── executions.py   # /executions エンドポイント
+│       ├── settings.py     # /settings エンドポイント
+│       └── config.py       # /config エンドポイント（エクスポート/インポート）
+├── pyproject.toml
 └── Dockerfile
 ```
 
@@ -68,7 +71,27 @@ DB_PATH=./dev.db uvicorn app.main:app --reload
 | 環境変数 | デフォルト | 説明 |
 |---------|-----------|------|
 | `DB_PATH` | `/data/opsboard.db` | SQLite データベースファイルのパス |
-| `SECRET_KEY` | `change-me-...` | SSH 資格情報の暗号化キー。**本番では必ず変更すること** |
+| `SECRET_KEY` | `change-me-...` | SSH 資格情報の暗号化キー兼トークン署名キー。**本番では必ず変更すること** |
+| `AUTH_PASSWORD` | _(空)_ | Web UI のパスワード。設定すると認証が有効になる。空の場合は認証無効 |
+| `AUTH_MAX_ATTEMPTS` | `5` | 連続失敗でロックアウトされるまでの回数 |
+| `AUTH_LOCKOUT_MINUTES` | `15` | ロックアウト継続時間（分） |
+| `AUTH_TOKEN_EXPIRE_HOURS` | `24` | ログイントークンの有効期限（時間） |
+
+## 認証
+
+`AUTH_PASSWORD` 環境変数を設定すると全 API エンドポイント（`/health` と `/auth/*` を除く）に Bearer トークン認証が適用されます。
+
+### ロックアウト
+
+パスワードを連続で間違えると、送信元 IP アドレスに対して一時的にアクセスが拒否されます（HTTP 429）。  
+ロック中は残り秒数がレスポンスの `detail` に含まれます。  
+ロック状態はメモリ上で管理されるため、サーバー再起動でリセットされます。
+
+### トークン形式
+
+外部ライブラリなしで実装した HMAC-SHA256 署名付きトークンです。  
+ペイロードに有効期限（`exp`）を含み、`SECRET_KEY` で署名します。  
+`SECRET_KEY` を変更すると既存トークンはすべて無効になります。
 
 ## モジュール解説
 
@@ -151,6 +174,10 @@ Pydantic による API リクエスト・レスポンスのモデル定義です
 全ルートのプレフィックスは `/api/v1` です。
 
 ```
+# 認証（認証不要）
+POST   /auth/login               ログイン・トークン取得 (429: ロックアウト中)
+GET    /auth/status              認証要否の確認 {"auth_required": bool}
+
 # サーバー管理
 GET    /servers                  一覧取得
 POST   /servers                  作成
@@ -172,6 +199,14 @@ PATCH  /jobs/{id}/enable         有効/無効切替 (?enabled=true|false)
 GET    /executions               一覧取得 (?job_id= / ?status= / ?limit= / ?offset=)
 GET    /executions/{id}          詳細取得 (stdout / parsed_result 含む)
 DELETE /executions/{id}          削除
+
+# 設定
+GET    /settings                 アプリ設定取得
+PUT    /settings                 アプリ設定更新
+
+# 設定エクスポート/インポート
+GET    /config/export            全設定を JSON でエクスポート
+POST   /config/import            JSON から全設定をインポート（既存データは置換）
 
 # スケジューラー
 GET    /scheduler/status         実行中ジョブ数・次回実行時刻の一覧
