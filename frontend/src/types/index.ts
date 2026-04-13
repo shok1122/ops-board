@@ -1,8 +1,11 @@
+export type ServerType = 'ssh' | 'no_ssh'
+
 export interface Server {
   id: string
   name: string
   host: string
   port: number
+  server_type: ServerType
   username: string
   auth_type: 'password' | 'key'
   created_at: string
@@ -13,7 +16,8 @@ export interface ServerCreate {
   name: string
   host: string
   port: number
-  username: string
+  server_type: ServerType
+  username?: string
   auth_type: 'password' | 'key'
   password?: string
   private_key?: string
@@ -23,6 +27,7 @@ export interface ServerCreate {
 export interface TestResult {
   ok: boolean
   latency_ms?: number
+  cert_expiry_days?: number
   error?: string
 }
 
@@ -154,6 +159,7 @@ export type BuiltinMetricKey =
   | 'disk_used_pct'
   | 'disk_used_gb'
   | 'process_count'
+  | 'ssl_cert_expiry_days'
 
 export interface BuiltinMetricDef {
   key: BuiltinMetricKey
@@ -161,6 +167,7 @@ export interface BuiltinMetricDef {
   unit: string
   configurable: boolean
   config_fields?: { key: string; label: string; default: string }[]
+  command_template?: string | null
 }
 
 export interface MonitorCreate {

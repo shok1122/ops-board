@@ -17,7 +17,8 @@ def _row_to_out(row) -> ServerOut:
         name=row["name"],
         host=row["host"],
         port=row["port"],
-        username=row["username"],
+        server_type=row["server_type"] if "server_type" in row.keys() else "ssh",
+        username=row["username"] or "",
         auth_type=row["auth_type"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -35,18 +36,23 @@ async def list_servers():
 
 @router.post("", response_model=ServerOut, status_code=201)
 async def create_server(body: ServerCreate):
+    if body.server_type == "ssh" and not body.username:
+        raise HTTPException(status_code=422, detail="SSH サーバーにはユーザー名が必要です (no_ssh サーバーは SSH 認証情報不要)")
+
     now = now_iso()
     sid = new_id()
+    username = body.username or ""
     async with get_db() as db:
         await db.execute(
             "INSERT INTO servers (id, name, host, port, username, auth_type, "
-            "password_enc, private_key_enc, passphrase_enc, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "password_enc, private_key_enc, passphrase_enc, server_type, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
-                sid, body.name, body.host, body.port, body.username, body.auth_type,
+                sid, body.name, body.host, body.port, username, body.auth_type,
                 encrypt(body.password) if body.password else None,
                 encrypt(body.private_key) if body.private_key else None,
                 encrypt(body.passphrase) if body.passphrase else None,
+                body.server_type,
                 now, now,
             ),
         )
@@ -81,6 +87,8 @@ async def update_server(server_id: str, body: ServerUpdate):
             updates["host"] = body.host
         if body.port is not None:
             updates["port"] = body.port
+        if body.server_type is not None:
+            updates["server_type"] = body.server_type
         if body.username is not None:
             updates["username"] = body.username
         if body.auth_type is not None:
@@ -122,6 +130,14 @@ async def test_server(server_id: str):
     if not row:
         raise HTTPException(404, "Server not found")
 
+    server_type = row["server_type"] if "server_type" in row.keys() else "ssh"
+
+    if server_type == "no_ssh":
+        from app.cert import check_ssl_certificate
+        days, error = await check_ssl_certificate(row["host"], port=row["port"])
+        ok = error is None and days is not None and days > 0
+        return TestResult(ok=ok, cert_expiry_days=days, error=error)
+
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None
     passphrase = decrypt(row["passphrase_enc"]) if row["passphrase_enc"] else None
@@ -140,6 +156,10 @@ async def check_server_status(server_id: str):
         row = await cur.fetchone()
     if not row:
         raise HTTPException(404, "Server not found")
+
+    server_type = row["server_type"] if "server_type" in row.keys() else "ssh"
+    if server_type == "no_ssh":
+        raise HTTPException(400, "SSH不要サーバーはシステムステータスチェックに対応していません")
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None

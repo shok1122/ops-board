@@ -42,11 +42,12 @@ def _parse_cron(expr: str) -> Optional[CronTrigger]:
 async def _execute_job(job_id: str):
     """Run a job and record the execution in the DB."""
     from app.crypto import decrypt
-    from app.ssh import run_command, fetch_file
+    from app.ssh import run_command, fetch_file, run_local_command
 
     async with get_db() as db:
         row = await db.execute(
             "SELECT j.*, s.host, s.port, s.username, s.auth_type, "
+            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM jobs j JOIN servers s ON j.server_id = s.id WHERE j.id = ?",
             (job_id,),
@@ -72,13 +73,19 @@ async def _execute_job(job_id: str):
         )
         await db.commit()
 
-    password = decrypt(job["password_enc"]) if job["password_enc"] else None
-    private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
-    passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
-
     try:
         timeout = float(job["timeout_sec"])
-        if job["type"] == "log_fetch" and job["log_path"]:
+        if job["server_type"] == "no_ssh":
+            # SSH不要サーバー: ローカルでコマンドを実行し REMOTE_HOST を渡す
+            result = await run_local_command(
+                job["command"] or "echo 'No command set'",
+                remote_host=job["host"],
+                timeout=timeout,
+            )
+        elif job["type"] == "log_fetch" and job["log_path"]:
+            password = decrypt(job["password_enc"]) if job["password_enc"] else None
+            private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
+            passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
             result = await fetch_file(
                 job["host"], job["port"], job["username"],
                 job["log_path"],
@@ -86,6 +93,9 @@ async def _execute_job(job_id: str):
                 timeout=timeout,
             )
         else:
+            password = decrypt(job["password_enc"]) if job["password_enc"] else None
+            private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
+            passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
             result = await run_command(
                 job["host"], job["port"], job["username"],
                 job["command"] or "echo 'No command set'",
@@ -146,11 +156,12 @@ async def _execute_job(job_id: str):
 async def _trigger_job_manual(job_id: str):
     """Same as _execute_job but marks triggered_by = 'manual'."""
     from app.crypto import decrypt
-    from app.ssh import run_command, fetch_file
+    from app.ssh import run_command, fetch_file, run_local_command
 
     async with get_db() as db:
         row = await db.execute(
             "SELECT j.*, s.host, s.port, s.username, s.auth_type, "
+            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM jobs j JOIN servers s ON j.server_id = s.id WHERE j.id = ?",
             (job_id,),
@@ -175,13 +186,18 @@ async def _trigger_job_manual(job_id: str):
         )
         await db.commit()
 
-    password = decrypt(job["password_enc"]) if job["password_enc"] else None
-    private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
-    passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
-
     try:
         timeout = float(job["timeout_sec"])
-        if job["type"] == "log_fetch" and job["log_path"]:
+        if job["server_type"] == "no_ssh":
+            result = await run_local_command(
+                job["command"] or "echo 'No command set'",
+                remote_host=job["host"],
+                timeout=timeout,
+            )
+        elif job["type"] == "log_fetch" and job["log_path"]:
+            password = decrypt(job["password_enc"]) if job["password_enc"] else None
+            private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
+            passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
             result = await fetch_file(
                 job["host"], job["port"], job["username"],
                 job["log_path"],
@@ -189,6 +205,9 @@ async def _trigger_job_manual(job_id: str):
                 timeout=timeout,
             )
         else:
+            password = decrypt(job["password_enc"]) if job["password_enc"] else None
+            private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
+            passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
             result = await run_command(
                 job["host"], job["port"], job["username"],
                 job["command"] or "echo 'No command set'",
@@ -332,6 +351,7 @@ async def _collect_monitor(monitor_id: str):
     async with get_db() as db:
         cur = await db.execute(
             "SELECT m.*, s.host, s.port, s.username, s.auth_type, "
+            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM monitors m JOIN servers s ON m.server_id = s.id WHERE m.id = ?",
             (monitor_id,),
@@ -342,20 +362,51 @@ async def _collect_monitor(monitor_id: str):
         logger.warning("Monitor %s not found; skipping collection", monitor_id)
         return
 
-    password = decrypt(monitor["password_enc"]) if monitor["password_enc"] else None
-    private_key = decrypt(monitor["private_key_enc"]) if monitor["private_key_enc"] else None
-    passphrase = decrypt(monitor["passphrase_enc"]) if monitor["passphrase_enc"] else None
     builtin_config = _json.loads(monitor["builtin_config"]) if monitor["builtin_config"] else None
 
     try:
-        value, error = await collect_metric(
-            monitor["host"], monitor["port"], monitor["username"],
-            metric_type=monitor["metric_type"],
-            builtin_key=monitor["builtin_key"],
-            builtin_config=builtin_config,
-            custom_script=monitor["custom_script"],
-            password=password, private_key=private_key, passphrase=passphrase,
-        )
+        # SSL証明書チェックはサーバータイプに関わらず直接TLS接続
+        if monitor["metric_type"] == "builtin" and monitor["builtin_key"] == "ssl_cert_expiry_days":
+            from app.cert import check_ssl_certificate
+            config = builtin_config or {}
+            port = int(config.get("port", monitor["port"] or 443))
+            value, error = await check_ssl_certificate(monitor["host"], port=port)
+        elif monitor["server_type"] == "no_ssh":
+            # SSH不要サーバー: コマンドをローカルで実行し REMOTE_HOST を渡す
+            from app.ssh import run_local_command
+            config = builtin_config or {}
+            if monitor["metric_type"] == "custom" and monitor["custom_script"]:
+                command = monitor["custom_script"]
+            elif monitor["metric_type"] == "builtin" and "command_override" in config:
+                command = config["command_override"]
+            else:
+                value = None
+                error = "SSH不要サーバーではカスタムスクリプトまたはコマンド上書きが必要です (ssl_cert_expiry_days を除く)"
+                command = None
+            if command:
+                result = await run_local_command(command, remote_host=monitor["host"])
+                if result.exit_code != 0:
+                    value = None
+                    error = result.stderr.strip() or f"Exit code {result.exit_code}"
+                else:
+                    try:
+                        value = float(result.stdout.strip())
+                        error = None
+                    except (ValueError, TypeError):
+                        value = None
+                        error = f"数値に変換できません: {result.stdout.strip()[:100]}"
+        else:
+            password = decrypt(monitor["password_enc"]) if monitor["password_enc"] else None
+            private_key = decrypt(monitor["private_key_enc"]) if monitor["private_key_enc"] else None
+            passphrase = decrypt(monitor["passphrase_enc"]) if monitor["passphrase_enc"] else None
+            value, error = await collect_metric(
+                monitor["host"], monitor["port"], monitor["username"],
+                metric_type=monitor["metric_type"],
+                builtin_key=monitor["builtin_key"],
+                builtin_config=builtin_config,
+                custom_script=monitor["custom_script"],
+                password=password, private_key=private_key, passphrase=passphrase,
+            )
     except Exception as exc:
         value, error = None, str(exc)
 
@@ -393,12 +444,15 @@ def unschedule_monitor(monitor_id: str):
 
 
 async def _auto_check_all_servers():
-    """Periodically collect system status for all registered servers."""
+    """Periodically collect system status for all registered SSH servers."""
     from app.crypto import decrypt
     from app.ssh import get_system_status
 
     async with get_db() as db:
-        cur = await db.execute("SELECT * FROM servers")
+        # no_ssh サーバーはSSH接続できないためスキップ
+        cur = await db.execute(
+            "SELECT * FROM servers WHERE COALESCE(server_type, 'ssh') = 'ssh'"
+        )
         servers = await cur.fetchall()
 
     for row in servers:

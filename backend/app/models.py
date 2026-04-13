@@ -9,7 +9,8 @@ class ServerCreate(BaseModel):
     name: str
     host: str
     port: int = 22
-    username: str
+    server_type: Literal["ssh", "no_ssh"] = "ssh"
+    username: Optional[str] = None
     auth_type: Literal["password", "key"] = "password"
     password: Optional[str] = None
     private_key: Optional[str] = None
@@ -20,6 +21,7 @@ class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
     port: Optional[int] = None
+    server_type: Optional[Literal["ssh", "no_ssh"]] = None
     username: Optional[str] = None
     auth_type: Optional[Literal["password", "key"]] = None
     password: Optional[str] = None
@@ -32,6 +34,7 @@ class ServerOut(BaseModel):
     name: str
     host: str
     port: int
+    server_type: str
     username: str
     auth_type: str
     created_at: str
@@ -41,6 +44,7 @@ class ServerOut(BaseModel):
 class TestResult(BaseModel):
     ok: bool
     latency_ms: Optional[float] = None
+    cert_expiry_days: Optional[float] = None
     error: Optional[str] = None
 
 
@@ -176,6 +180,7 @@ BUILTIN_METRIC_KEYS = [
     "disk_used_pct",
     "disk_used_gb",
     "process_count",
+    "ssl_cert_expiry_days",
 ]
 
 
@@ -183,7 +188,7 @@ class MonitorCreate(BaseModel):
     name: str
     description: Optional[str] = None
     server_id: str
-    interval_minutes: int = Field(default=5, ge=1, le=1440)
+    interval_minutes: int = Field(default=5, ge=1, le=44640)  # 最大31日
     enabled: bool = True
     metric_type: Literal["builtin", "custom"] = "builtin"
     builtin_key: Optional[str] = None
@@ -198,7 +203,7 @@ class MonitorUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     server_id: Optional[str] = None
-    interval_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    interval_minutes: Optional[int] = Field(default=None, ge=1, le=44640)
     enabled: Optional[bool] = None
     metric_type: Optional[Literal["builtin", "custom"]] = None
     builtin_key: Optional[str] = None

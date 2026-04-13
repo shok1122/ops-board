@@ -16,11 +16,12 @@ CREATE TABLE IF NOT EXISTS servers (
     name TEXT NOT NULL,
     host TEXT NOT NULL,
     port INTEGER NOT NULL DEFAULT 22,
-    username TEXT NOT NULL,
+    username TEXT NOT NULL DEFAULT '',
     auth_type TEXT NOT NULL DEFAULT 'password',
     password_enc TEXT,
     private_key_enc TEXT,
     passphrase_enc TEXT,
+    server_type TEXT NOT NULL DEFAULT 'ssh',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -112,6 +113,14 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(_SCHEMA)
         await db.commit()
+        # マイグレーション: server_type カラムが存在しない場合は追加
+        cur = await db.execute("PRAGMA table_info(servers)")
+        cols = [row[1] for row in await cur.fetchall()]
+        if "server_type" not in cols:
+            await db.execute(
+                "ALTER TABLE servers ADD COLUMN server_type TEXT NOT NULL DEFAULT 'ssh'"
+            )
+            await db.commit()
 
 
 @asynccontextmanager

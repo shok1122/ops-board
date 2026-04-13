@@ -267,15 +267,34 @@ async def get_monitor_data(
 async def list_builtin_metrics():
     from app.ssh import BUILTIN_METRIC_COMMANDS
     defaults = {
-        "cpu_load_1m":   {"label": "CPU Load (1m)",   "unit": "",   "configurable": False},
-        "cpu_load_5m":   {"label": "CPU Load (5m)",   "unit": "",   "configurable": False},
-        "cpu_load_15m":  {"label": "CPU Load (15m)",  "unit": "",   "configurable": False},
-        "mem_used_pct":  {"label": "Memory Usage",    "unit": "%",  "configurable": False},
-        "mem_used_mb":   {"label": "Memory Used",     "unit": "MB", "configurable": False},
+        "cpu_load_1m":   {"label": "CPU Load (1m)",   "unit": "",   "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_1m"]},
+        "cpu_load_5m":   {"label": "CPU Load (5m)",   "unit": "",   "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_5m"]},
+        "cpu_load_15m":  {"label": "CPU Load (15m)",  "unit": "",   "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_15m"]},
+        "mem_used_pct":  {"label": "Memory Usage",    "unit": "%",  "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["mem_used_pct"]},
+        "mem_used_mb":   {"label": "Memory Used",     "unit": "MB", "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["mem_used_mb"]},
         "disk_used_pct": {"label": "Disk Usage",      "unit": "%",  "configurable": True,
-                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}]},
+                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
+                          "command_template": BUILTIN_METRIC_COMMANDS["disk_used_pct"]},
         "disk_used_gb":  {"label": "Disk Used",       "unit": "GB", "configurable": True,
-                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}]},
-        "process_count": {"label": "Process Count",   "unit": "",   "configurable": False},
+                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
+                          "command_template": BUILTIN_METRIC_COMMANDS["disk_used_gb"]},
+        "process_count": {"label": "Process Count",   "unit": "",   "configurable": False,
+                          "command_template": BUILTIN_METRIC_COMMANDS["process_count"]},
+        "ssl_cert_expiry_days": {
+            "label": "SSL Cert Expiry",
+            "unit": "日",
+            "configurable": True,
+            "config_fields": [{"key": "port", "label": "HTTPS port", "default": "443"}],
+            "command_template": None,  # TLS直接接続のためコマンドなし
+        },
     }
-    return [{"key": k, **v} for k, v in defaults.items() if k in BUILTIN_METRIC_COMMANDS]
+    return [
+        {"key": k, **v}
+        for k, v in defaults.items()
+        if k in BUILTIN_METRIC_COMMANDS or k == "ssl_cert_expiry_days"
+    ]

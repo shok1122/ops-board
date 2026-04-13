@@ -128,13 +128,46 @@ function MonitorChart({ monitor }: { monitor: Monitor }) {
 
       {/* Footer */}
       <div className="text-xs text-gray-400 flex items-center gap-2">
-        <span>毎 {monitor.interval_minutes} 分</span>
+        <span>毎 {formatInterval(monitor.interval_minutes)}</span>
         {latest && (
           <span>最終: {new Date(latest.collected_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
         )}
       </div>
     </div>
   )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+type IntervalUnit = 'min' | 'hour' | 'day'
+
+function toMinutes(value: number, unit: IntervalUnit): number {
+  if (unit === 'hour') return value * 60
+  if (unit === 'day')  return value * 1440
+  return value
+}
+
+function fromMinutes(minutes: number): { value: number; unit: IntervalUnit } {
+  if (minutes >= 1440 && minutes % 1440 === 0) return { value: minutes / 1440, unit: 'day' }
+  if (minutes >= 60   && minutes % 60   === 0) return { value: minutes / 60,   unit: 'hour' }
+  return { value: minutes, unit: 'min' }
+}
+
+function formatInterval(minutes: number): string {
+  const { value, unit } = fromMinutes(minutes)
+  if (unit === 'day')  return `${value}日`
+  if (unit === 'hour') return `${value}時間`
+  return `${value}分`
+}
+
+/** Python format string ({path}, {{literal}}) をコンフィグ値で解決して返す */
+function resolveCommandTemplate(template: string, config: Record<string, string>, defaults: Record<string, string>): string {
+  return template
+    .replace(/\{\{/g, '\x00')
+    .replace(/\}\}/g, '\x01')
+    .replace(/\{(\w+)\}/g, (_, key) => config[key] ?? defaults[key] ?? `{${key}}`)
+    .replace(/\x00/g, '{')
+    .replace(/\x01/g, '}')
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -169,8 +202,36 @@ function MonitorModal({
 }) {
   const [form, setForm] = useState<MonitorCreate>(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [intervalState, setIntervalState] = useState(() =>
+    fromMinutes((initial ?? EMPTY_FORM).interval_minutes)
+  )
 
   const selectedBuiltin = builtins.find(b => b.key === form.builtin_key)
+
+  // ビルトインコマンドのデフォルト (config適用済み)
+  const defaultConfigValues = Object.fromEntries(
+    selectedBuiltin?.config_fields?.map(f => [f.key, f.default]) ?? []
+  )
+  const resolvedDefaultCmd = selectedBuiltin?.command_template
+    ? resolveCommandTemplate(selectedBuiltin.command_template, form.builtin_config ?? {}, defaultConfigValues)
+    : null
+  const commandOverride = (form.builtin_config ?? {})['command_override'] as string | undefined
+
+  const handleCommandChange = (val: string) => {
+    const trimmed = val.trim()
+    const cfg = { ...(form.builtin_config ?? {}) }
+    if (!trimmed || trimmed === resolvedDefaultCmd) {
+      delete cfg['command_override']
+    } else {
+      cfg['command_override'] = val
+    }
+    setField('builtin_config', cfg)
+  }
+
+  const handleIntervalChange = (value: number, unit: IntervalUnit) => {
+    setIntervalState({ value, unit })
+    setField('interval_minutes', toMinutes(value, unit))
+  }
 
   const setField = <K extends keyof MonitorCreate>(k: K, v: MonitorCreate[K]) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -276,7 +337,7 @@ function MonitorModal({
                       ...f,
                       builtin_key: key,
                       unit: f.unit || def?.unit || '',
-                      builtin_config: {},
+                      builtin_config: {},  // command_override も含めてリセット
                     }))
                   }}
                 >
@@ -293,13 +354,49 @@ function MonitorModal({
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder={cf.default}
                       value={(form.builtin_config ?? {})[cf.key] ?? ''}
-                      onChange={e => setField('builtin_config', {
-                        ...(form.builtin_config ?? {}),
-                        [cf.key]: e.target.value || cf.default,
-                      })}
+                      onChange={e => {
+                        const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
+                        // コンフィグ変更時はコマンド上書きをリセット
+                        delete cfg['command_override']
+                        setField('builtin_config', cfg)
+                      }}
                     />
                   </div>
                 ))}
+
+                {/* ssl_cert_expiry_days: コマンドなし説明 */}
+                {selectedBuiltin && 'command_template' in selectedBuiltin && selectedBuiltin.command_template === null && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                    このメトリクスはTLS直接接続で証明書の有効期限を取得します（シェルコマンドなし）
+                  </div>
+                )}
+
+                {/* コマンド編集 (ssl_cert_expiry_days 以外) */}
+                {resolvedDefaultCmd !== null && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      実行コマンド
+                      {commandOverride && (
+                        <span className="ml-2 text-[10px] text-amber-600 font-normal">カスタム編集済み</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCommandChange(resolvedDefaultCmd ?? '')}
+                        className="ml-2 text-[10px] text-indigo-500 hover:underline font-normal"
+                      >
+                        デフォルトに戻す
+                      </button>
+                    </label>
+                    <textarea
+                      rows={2}
+                      className={`w-full rounded-lg border px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        commandOverride ? 'border-amber-300 bg-amber-50' : 'border-gray-200'
+                      }`}
+                      value={commandOverride ?? resolvedDefaultCmd ?? ''}
+                      onChange={e => handleCommandChange(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -333,15 +430,29 @@ function MonitorModal({
 
             {/* Interval */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">収集間隔（分）</label>
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.interval_minutes}
-                onChange={e => setField('interval_minutes', Number(e.target.value))}
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-1">収集間隔</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={intervalState.unit === 'day' ? 31 : intervalState.unit === 'hour' ? 744 : 44640}
+                  className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={intervalState.value}
+                  onChange={e => handleIntervalChange(Math.max(1, Number(e.target.value)), intervalState.unit)}
+                />
+                <select
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={intervalState.unit}
+                  onChange={e => handleIntervalChange(intervalState.value, e.target.value as IntervalUnit)}
+                >
+                  <option value="min">分</option>
+                  <option value="hour">時間</option>
+                  <option value="day">日</option>
+                </select>
+                <span className="self-center text-xs text-gray-400">
+                  = {form.interval_minutes}分
+                </span>
+              </div>
             </div>
 
             {/* Thresholds */}

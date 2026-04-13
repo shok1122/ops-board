@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import asyncssh
 from typing import Optional
@@ -165,10 +166,14 @@ async def collect_metric(
     if metric_type == "builtin":
         if not builtin_key or builtin_key not in BUILTIN_METRIC_COMMANDS:
             return None, f"Unknown builtin metric key: {builtin_key}"
-        template = BUILTIN_METRIC_COMMANDS[builtin_key]
         config = {**(builtin_config or {})}
-        config.setdefault("path", "/")
-        command = template.format(**config)
+        # command_override が指定されていればそれを使う
+        if "command_override" in config:
+            command = config["command_override"]
+        else:
+            template = BUILTIN_METRIC_COMMANDS[builtin_key]
+            config.setdefault("path", "/")
+            command = template.format(**config)
     else:
         if not custom_script:
             return None, "No custom script provided"
@@ -187,6 +192,32 @@ async def collect_metric(
         return value, None
     except (ValueError, TypeError):
         return None, f"Could not parse output as number: {result.stdout.strip()[:100]}"
+
+
+async def run_local_command(
+    command: str,
+    remote_host: str,
+    timeout: float = 30.0,
+) -> SSHResult:
+    """SSH不要サーバー用: コマンドをローカルで実行し、REMOTE_HOST 環境変数を渡す。"""
+    env = {**os.environ, "REMOTE_HOST": remote_host}
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return SSHResult(
+            stdout=stdout.decode(errors="replace"),
+            stderr=stderr.decode(errors="replace"),
+            exit_code=proc.returncode if proc.returncode is not None else -1,
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        raise
 
 
 async def test_connection(

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle, ShieldCheck } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -14,9 +14,20 @@ import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, Monitor
 import { JobResultCard } from '../components/JobResultView'
 
 const emptyForm: ServerCreate = {
-  name: '', host: '', port: 22, username: '',
-  auth_type: 'password', password: '', private_key: '', passphrase: '',
+  name: '', host: '', port: 22, server_type: 'ssh',
+  username: '', auth_type: 'password', password: '', private_key: '', passphrase: '',
 }
+
+const SERVER_TYPE_INFO = {
+  ssh: {
+    label: 'SSH',
+    description: 'SSH経由でジョブ実行・監視',
+  },
+  no_ssh: {
+    label: 'SSH不要',
+    description: 'ローカル実行 — $REMOTE_HOST でホスト名を参照',
+  },
+} as const
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -189,7 +200,7 @@ export default function Servers() {
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
   const [form, setForm] = useState<ServerCreate>(emptyForm)
-  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms?: number; error?: string; testing: boolean }>>({})
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms?: number; cert_expiry_days?: number; error?: string; testing: boolean }>>({})
   const [statusData, setStatusData] = useState<Record<string, { loading: boolean; data?: ServerStatus }>>({})
   const { data: latestStatuses } = useQuery({
     queryKey: ['server-statuses'],
@@ -222,7 +233,11 @@ export default function Servers() {
   })
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
-    setForm({ name: s.name, host: s.host, port: s.port, username: s.username, auth_type: s.auth_type })
+    setForm({
+      name: s.name, host: s.host, port: s.port,
+      server_type: s.server_type ?? 'ssh',
+      username: s.username, auth_type: s.auth_type,
+    })
     setModal({ open: true, editing: s })
   }
   const closeModal = () => setModal({ open: false })
@@ -281,40 +296,72 @@ export default function Servers() {
           {data?.items.map((s) => {
             const tr = testResults[s.id]
             const ss = statusData[s.id]
+            const isCertOnly = s.server_type === 'no_ssh'
             return (
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                  <Server className="h-5 w-5 text-indigo-400 shrink-0" />
+                  {isCertOnly
+                    ? <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
+                    : <Server className="h-5 w-5 text-indigo-400 shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-gray-900">{s.name}</div>
-                    <div className="text-xs text-gray-400">{s.host}:{s.port} · {s.username} ·{' '}
-                      <span className="rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{s.name}</span>
+                      {isCertOnly && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          証明書チェック
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {s.host}:{s.port}
+                      {!isCertOnly && <> · {s.username} ·{' '}
+                        <span className="rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
+                      </>}
                     </div>
                   </div>
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleTest(s.id)}
-                      disabled={tr?.testing}
-                      className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      {tr?.testing ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : tr?.ok ? <Wifi className="h-3 w-3 text-emerald-500" />
-                        : tr && !tr.ok ? <WifiOff className="h-3 w-3 text-red-500" />
-                        : <Wifi className="h-3 w-3 text-gray-400" />}
-                      {tr?.ok ? `${tr.latency_ms}ms` : tr?.error ? 'エラー' : '接続テスト'}
-                    </button>
-                    <button
-                      onClick={() => handleCheckNow(s.id)}
-                      disabled={ss?.loading}
-                      className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      {ss?.loading
-                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : <Activity className="h-3 w-3 text-gray-400" />}
-                      今すぐ確認
-                    </button>
+                    {isCertOnly ? (
+                      <button
+                        onClick={() => handleTest(s.id)}
+                        disabled={tr?.testing}
+                        className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {tr?.testing ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : tr?.ok ? <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                          : tr && !tr.ok ? <WifiOff className="h-3 w-3 text-red-500" />
+                          : <ShieldCheck className="h-3 w-3 text-gray-400" />}
+                        {tr?.testing ? '確認中…'
+                          : tr?.ok ? `残り ${tr.cert_expiry_days}日`
+                          : tr?.error ? 'エラー'
+                          : '証明書確認'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleTest(s.id)}
+                          disabled={tr?.testing}
+                          className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {tr?.testing ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : tr?.ok ? <Wifi className="h-3 w-3 text-emerald-500" />
+                            : tr && !tr.ok ? <WifiOff className="h-3 w-3 text-red-500" />
+                            : <Wifi className="h-3 w-3 text-gray-400" />}
+                          {tr?.ok ? `${tr.latency_ms}ms` : tr?.error ? 'エラー' : '接続テスト'}
+                        </button>
+                        <button
+                          onClick={() => handleCheckNow(s.id)}
+                          disabled={ss?.loading}
+                          className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {ss?.loading
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Activity className="h-3 w-3 text-gray-400" />}
+                          今すぐ確認
+                        </button>
+                      </>
+                    )}
                     <div className="w-px h-5 bg-gray-200" />
                     <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                       <Pencil className="h-4 w-4" />
@@ -330,16 +377,18 @@ export default function Servers() {
 
                 {/* Status body — always visible */}
                 <div className="px-5 py-4 bg-gray-50/50">
-                  {ss?.loading && !ss?.data ? (
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> 取得中…
-                    </div>
-                  ) : ss?.data ? (
+                  {!isCertOnly && (
                     <>
-                      <StatusSummary status={ss.data} />
+                      {ss?.loading && !ss?.data ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> 取得中…
+                        </div>
+                      ) : ss?.data ? (
+                        <StatusSummary status={ss.data} />
+                      ) : (
+                        <p className="text-xs text-gray-400">「今すぐ確認」を押すと状態が表示されます。</p>
+                      )}
                     </>
-                  ) : (
-                    <p className="text-xs text-gray-400">「今すぐ確認」を押すと状態が表示されます。</p>
                   )}
                   <ServerMonitorCharts serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
@@ -360,6 +409,41 @@ export default function Servers() {
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* サーバータイプ選択 */}
+              <Field label="サーバータイプ">
+                <div className="flex gap-3">
+                  {(['ssh', 'no_ssh'] as const).map(t => (
+                    <label key={t} className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      form.server_type === t
+                        ? t === 'no_ssh'
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-indigo-500 bg-indigo-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="server_type"
+                        value={t}
+                        checked={form.server_type === t}
+                        onChange={() => setForm(f => ({ ...f, server_type: t }))}
+                        className="sr-only"
+                      />
+                      {t === 'no_ssh'
+                        ? <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+                        : <Server className="h-4 w-4 text-indigo-500 shrink-0" />}
+                      <div>
+                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'no_ssh' ? 'text-emerald-700' : 'text-indigo-700') : 'text-gray-700'}`}>
+                          {SERVER_TYPE_INFO[t].label}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          {SERVER_TYPE_INFO[t].description}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </Field>
+
               <div className="grid grid-cols-2 gap-4">
                 <Field label="表示名 *">
                   <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -369,39 +453,49 @@ export default function Servers() {
                   <input required value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
                     className="input" placeholder="192.168.1.1" />
                 </Field>
-                <Field label="ポート">
-                  <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
-                    className="input" />
-                </Field>
-                <Field label="ユーザー名 *">
-                  <input required value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                    className="input" placeholder="ubuntu" />
-                </Field>
+                {form.server_type === 'ssh' && (
+                  <>
+                    <Field label="ポート">
+                      <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
+                        className="input" />
+                    </Field>
+                    <Field label="ユーザー名 *">
+                      <input required value={form.username ?? ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                        className="input" placeholder="ubuntu" />
+                    </Field>
+                  </>
+                )}
               </div>
-              <Field label="認証方式">
-                <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}
-                  className="input">
-                  <option value="password">パスワード</option>
-                  <option value="key">秘密鍵</option>
-                </select>
-              </Field>
-              {form.auth_type === 'password' ? (
-                <Field label="パスワード">
-                  <input type="password" value={form.password ?? ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    className="input" placeholder="••••••••" />
-                </Field>
-              ) : (
+
+              {form.server_type === 'ssh' && (
                 <>
-                  <Field label="秘密鍵 (PEM形式)">
-                    <textarea rows={5} value={form.private_key ?? ''} onChange={e => setForm(f => ({ ...f, private_key: e.target.value }))}
-                      className="input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                  <Field label="認証方式">
+                    <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}
+                      className="input">
+                      <option value="password">パスワード</option>
+                      <option value="key">秘密鍵</option>
+                    </select>
                   </Field>
-                  <Field label="パスフレーズ (任意)">
-                    <input type="password" value={form.passphrase ?? ''} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))}
-                      className="input" />
-                  </Field>
+                  {form.auth_type === 'password' ? (
+                    <Field label="パスワード">
+                      <input type="password" value={form.password ?? ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                        className="input" placeholder="••••••••" />
+                    </Field>
+                  ) : (
+                    <>
+                      <Field label="秘密鍵 (PEM形式)">
+                        <textarea rows={5} value={form.private_key ?? ''} onChange={e => setForm(f => ({ ...f, private_key: e.target.value }))}
+                          className="input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                      </Field>
+                      <Field label="パスフレーズ (任意)">
+                        <input type="password" value={form.passphrase ?? ''} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))}
+                          className="input" />
+                      </Field>
+                    </>
+                  )}
                 </>
               )}
+
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>
                 <button type="submit" disabled={createMut.isPending || updateMut.isPending} className="btn-primary">
