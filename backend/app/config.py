@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     db_path: str = "/data/opsboard.db"
     secret_key: str = "change-me-in-production-32bytes!!"
+    scripts_dir: str = "/data/scripts"
 
     # Authentication settings
     # AUTH_PASSWORD が空の場合は認証無効

@@ -1,8 +1,30 @@
 import asyncio
 import os
+import re
 import time
-import asyncssh
+from pathlib import Path
 from typing import Optional
+
+import asyncssh
+
+_MONITOR_SCRIPTS_DIR = Path(__file__).parent / "scripts" / "monitors"
+
+
+def _load_monitor_cmd(name: str) -> str:
+    """scripts/monitors/{name}.sh の内容を読み込んで返す（末尾の空白を除去）。"""
+    return (_MONITOR_SCRIPTS_DIR / f"{name}.sh").read_text(encoding="utf-8").strip()
+
+
+def _expand_template(template: str, config: dict) -> str:
+    """{key} プレースホルダーを config の値で置換する。
+
+    Python の str.format() と異なり、awk の '{print $1}' のような
+    シェル構文内の波括弧には触れない（\w+ のみにマッチ）。
+    """
+    def _replace(m: re.Match) -> str:
+        key = m.group(1)
+        return str(config[key]) if key in config else m.group(0)
+    return re.sub(r'\{(\w+)\}', _replace, template)
 
 
 class SSHResult:
@@ -138,28 +160,29 @@ async def get_system_status(
 
 
 # mem_used の unit_type 別コマンド（collect_metric で動的選択）
+# scripts/monitors/mem_used_pct.sh / mem_used_mb.sh から読み込む
 _MEM_USED_COMMANDS: dict[str, str] = {
-    "pct": "free | awk '/^Mem:/{{printf \"%.1f\", $3/$2*100}}'",
-    "mb":  "free | awk '/^Mem:/{{print $3}}'",
+    "pct": _load_monitor_cmd("mem_used_pct"),
+    "mb":  _load_monitor_cmd("mem_used_mb"),
 }
 
 BUILTIN_METRIC_COMMANDS: dict[str, str] = {
     # ── 統合メトリクス（変数選択対応）────────────────────────────────────
     # cpu_load: {awk_field} は collect_metric 内で interval → $1/$2/$3 に変換
-    "cpu_load":      "awk '{{print {awk_field}}}' /proc/loadavg",
+    "cpu_load":      _load_monitor_cmd("cpu_load"),
     # mem_used: collect_metric 内で unit_type に応じてコマンドを切り替え
     "mem_used":      _MEM_USED_COMMANDS["pct"],
     # ── 個別キー（後方互換のため保持、UI には表示しない）──────────────
-    "cpu_load_1m":   "awk '{print $1}' /proc/loadavg",
-    "cpu_load_5m":   "awk '{print $2}' /proc/loadavg",
-    "cpu_load_15m":  "awk '{print $3}' /proc/loadavg",
-    "mem_used_pct":  "free | awk '/^Mem:/{{printf \"%.1f\", $3/$2*100}}'",
-    "mem_used_mb":   "free | awk '/^Mem:/{{print $3}}'",
+    "cpu_load_1m":   _load_monitor_cmd("cpu_load_1m"),
+    "cpu_load_5m":   _load_monitor_cmd("cpu_load_5m"),
+    "cpu_load_15m":  _load_monitor_cmd("cpu_load_15m"),
+    "mem_used_pct":  _MEM_USED_COMMANDS["pct"],
+    "mem_used_mb":   _MEM_USED_COMMANDS["mb"],
     # ── その他 ───────────────────────────────────────────────────────────
-    "disk_used_pct": "df {path} | awk 'NR==2{{print $5}}' | tr -d '%'",
-    "disk_used_gb":  "df -BG {path} | awk 'NR==2{{gsub(/G/,\"\"); print $3}}'",
-    "process_count": "ps aux | wc -l",
-    "ssl_cert_expiry_days": r"""echo | openssl s_client -connect {host}:{port} -servername {host} 2>/dev/null | openssl x509 -noout -enddate | awk -F= '{{cmd="date -d \""$2"\" +%s"; cmd | getline exp; close(cmd); print int((exp-systime())/86400)}}'""",
+    "disk_used_pct": _load_monitor_cmd("disk_used_pct"),
+    "disk_used_gb":  _load_monitor_cmd("disk_used_gb"),
+    "process_count": _load_monitor_cmd("process_count"),
+    "ssl_cert_expiry_days": _load_monitor_cmd("ssl_cert_expiry_days"),
 }
 
 
@@ -196,7 +219,7 @@ async def collect_metric(
             # mem_used: unit_type (pct/mb) に応じてコマンドを切り替え
             elif builtin_key == "mem_used":
                 template = _MEM_USED_COMMANDS.get(config.get("unit_type", "pct"), _MEM_USED_COMMANDS["pct"])
-            command = template.format(**config)
+            command = _expand_template(template, config)
     else:
         if not custom_script:
             return None, "No custom script provided"

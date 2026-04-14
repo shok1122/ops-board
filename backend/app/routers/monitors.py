@@ -298,8 +298,8 @@ async def list_builtin_metrics():
                     "default": "pct",
                     "type": "select",
                     "options": [
-                        {"value": "pct", "label": "% (使用率)",  "unit": "%",  "resolved_command": _MEM_USED_COMMANDS["pct"].replace("{{", "{").replace("}}", "}")},
-                        {"value": "mb",  "label": "MB (使用量)", "unit": "MB", "resolved_command": _MEM_USED_COMMANDS["mb"].replace("{{", "{").replace("}}", "}")},
+                        {"value": "pct", "label": "% (使用率)",  "unit": "%",  "resolved_command": _MEM_USED_COMMANDS["pct"]},
+                        {"value": "mb",  "label": "MB (使用量)", "unit": "MB", "resolved_command": _MEM_USED_COMMANDS["mb"]},
                     ],
                 }
             ],

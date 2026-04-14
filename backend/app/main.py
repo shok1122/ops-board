@@ -12,9 +12,44 @@ from app.routers.auth import router as auth_router, require_auth
 logging.basicConfig(level=logging.INFO)
 
 
+async def _migrate_scripts_to_files():
+    """DB に content があり file_path が未設定のスクリプトをファイルへ移行する。"""
+    import logging
+    from pathlib import Path
+    from app.config import settings
+    from app.database import get_db, now_iso
+
+    _EXT = {"bash": "sh", "python": "py", "ruby": "rb"}
+    log = logging.getLogger(__name__)
+
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT id, language, content FROM scripts WHERE (file_path IS NULL OR file_path = '') AND content != ''"
+        )
+        rows = await cur.fetchall()
+
+    for row in rows:
+        ext = _EXT.get(row["language"], "sh")
+        d = Path(settings.scripts_dir) / "user"
+        d.mkdir(parents=True, exist_ok=True)
+        file_path = d / f"{row['id']}.{ext}"
+        try:
+            file_path.write_text(row["content"], encoding="utf-8")
+            async with get_db() as db:
+                await db.execute(
+                    "UPDATE scripts SET file_path = ?, content = '', updated_at = ? WHERE id = ?",
+                    (str(file_path), now_iso(), row["id"]),
+                )
+                await db.commit()
+            log.info("Migrated script %s to %s", row["id"], file_path)
+        except Exception as exc:
+            log.error("Failed to migrate script %s: %s", row["id"], exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await _migrate_scripts_to_files()
     scheduler.start()
     await reload_all_jobs()
     yield

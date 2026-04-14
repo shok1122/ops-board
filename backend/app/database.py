@@ -132,6 +132,12 @@ async def init_db():
                 "ALTER TABLE servers ADD COLUMN server_type TEXT NOT NULL DEFAULT 'ssh'"
             )
             await db.commit()
+        # マイグレーション: scripts テーブルに file_path カラムが存在しない場合は追加
+        cur = await db.execute("PRAGMA table_info(scripts)")
+        script_cols = [row[1] for row in await cur.fetchall()]
+        if "file_path" not in script_cols:
+            await db.execute("ALTER TABLE scripts ADD COLUMN file_path TEXT")
+            await db.commit()
 
 
 @asynccontextmanager
