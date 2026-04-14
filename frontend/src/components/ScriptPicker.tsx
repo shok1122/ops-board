@@ -160,7 +160,7 @@ export function ScriptPickerModal({
             <BookOpen className="h-4 w-4 text-indigo-500" />
             <h3 className="font-semibold text-gray-900 text-sm">スクリプトを選択</h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -179,7 +179,7 @@ export function ScriptPickerModal({
           </div>
           <div className="flex gap-2">
             {(['', 'bash', 'python', 'ruby'] as const).map(lang => (
-              <button key={lang} onClick={() => setFilterLang(lang)}
+              <button type="button" key={lang} onClick={() => setFilterLang(lang)}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
                   filterLang === lang
                     ? 'bg-indigo-600 text-white border-indigo-600'
@@ -214,6 +214,7 @@ export function ScriptPickerModal({
                       return (
                         <li key={s.id}>
                           <button
+                            type="button"
                             className={`w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors ${selectedId === s.id ? 'bg-indigo-50' : ''}`}
                             onClick={() => setSelectedId(s.id)}
                           >
@@ -273,11 +274,12 @@ export function ScriptPickerModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-3 shrink-0">
-          <button onClick={onClose}
+          <button type="button" onClick={onClose}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
             キャンセル
           </button>
           <button
+            type="button"
             disabled={!selected}
             onClick={() => { if (selected) { onSelect(selected); onClose() } }}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
