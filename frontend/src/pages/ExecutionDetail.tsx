@@ -34,15 +34,7 @@ export default function ExecutionDetail() {
     ? Math.round((new Date(exec.finished_at).getTime() - new Date(exec.started_at).getTime()) / 1000)
     : null
 
-  // parsed_result is stored as a JobResultOutput JSON object
-  const jobOutput: JobResultOutput | null = (() => {
-    if (!exec.parsed_result || exec.parsed_result.length === 0) return null
-    const first = exec.parsed_result[0] as unknown
-    if (first && typeof first === 'object' && !Array.isArray(first)) {
-      return first as JobResultOutput
-    }
-    return null
-  })()
+  const jobOutput: JobResultOutput | null = exec.parsed_result ?? null
   const hasParsed = jobOutput !== null
   const hasRaw = !!exec.stdout || !!exec.stderr
 

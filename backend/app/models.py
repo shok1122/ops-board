@@ -125,7 +125,7 @@ class ExecutionOut(BaseModel):
     exit_code: Optional[int]
     stdout: Optional[str]
     stderr: Optional[str]
-    parsed_result: Optional[list[dict[str, Any]]]
+    parsed_result: Optional[dict[str, Any]]
     created_at: str
 
 

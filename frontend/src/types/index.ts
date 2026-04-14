@@ -101,7 +101,7 @@ export interface LogEntry {
 export interface Execution extends ExecutionSummary {
   stdout?: string
   stderr?: string
-  parsed_result?: LogEntry[]
+  parsed_result?: JobResultOutput
 }
 
 export interface PagedResponse<T> {
