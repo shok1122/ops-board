@@ -227,9 +227,23 @@ function MonitorModal({
   const defaultConfigValues = Object.fromEntries(
     selectedBuiltin?.config_fields?.map(f => [f.key, f.default]) ?? []
   )
+
+  /** select 型フィールドの選択中オプションから resolved_command を取得 */
+  const getSelectResolvedCommand = (): string | null => {
+    if (!selectedBuiltin?.config_fields) return null
+    for (const cf of selectedBuiltin.config_fields) {
+      if (cf.type === 'select' && cf.options) {
+        const currentVal = (form.builtin_config ?? {})[cf.key] ?? cf.default
+        const opt = cf.options.find(o => o.value === currentVal)
+        if (opt?.resolved_command) return opt.resolved_command
+      }
+    }
+    return null
+  }
+
   const resolvedDefaultCmd = selectedBuiltin?.command_template
     ? resolveCommandTemplate(selectedBuiltin.command_template, form.builtin_config ?? {}, defaultConfigValues)
-    : null
+    : getSelectResolvedCommand()
   const commandOverride = (form.builtin_config ?? {})['command_override'] as string | undefined
 
   const handleCommandChange = (val: string) => {
@@ -324,16 +338,38 @@ function MonitorModal({
               {selectedBuiltin?.configurable && selectedBuiltin.config_fields?.map(cf => (
                 <div key={cf.key} className="mt-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">{cf.label}</label>
-                  <input
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder={cf.default}
-                    value={(form.builtin_config ?? {})[cf.key] ?? ''}
-                    onChange={e => {
-                      const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
-                      delete cfg['command_override']
-                      setField('builtin_config', cfg)
-                    }}
-                  />
+                  {cf.type === 'select' && cf.options ? (
+                    <select
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      value={(form.builtin_config ?? {})[cf.key] ?? cf.default}
+                      onChange={e => {
+                        const val = e.target.value
+                        const cfg = { ...(form.builtin_config ?? {}), [cf.key]: val }
+                        delete cfg['command_override']
+                        setField('builtin_config', cfg)
+                        // select オプションに unit が定義されていれば form.unit を自動更新
+                        const opt = cf.options!.find(o => o.value === val)
+                        if (opt?.unit !== undefined) {
+                          setField('unit', opt.unit)
+                        }
+                      }}
+                    >
+                      {cf.options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder={cf.default}
+                      value={(form.builtin_config ?? {})[cf.key] ?? ''}
+                      onChange={e => {
+                        const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
+                        delete cfg['command_override']
+                        setField('builtin_config', cfg)
+                      }}
+                    />
+                  )}
                 </div>
               ))}
 

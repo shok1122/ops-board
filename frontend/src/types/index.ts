@@ -151,6 +151,8 @@ export interface JobTemplate {
 export type MonitorMetricType = 'builtin' | 'custom'
 
 export type BuiltinMetricKey =
+  | 'cpu_load'
+  | 'mem_used'
   | 'cpu_load_1m'
   | 'cpu_load_5m'
   | 'cpu_load_15m'
@@ -161,12 +163,29 @@ export type BuiltinMetricKey =
   | 'process_count'
   | 'ssl_cert_expiry_days'
 
+export interface BuiltinMetricConfigOption {
+  value: string
+  label: string
+  /** この選択肢を選んだときに自動セットされる unit */
+  unit?: string
+  /** この選択肢を選んだときに実行されるコマンド（プレビュー用） */
+  resolved_command?: string
+}
+
+export interface BuiltinMetricConfigField {
+  key: string
+  label: string
+  default: string
+  type?: 'text' | 'select'
+  options?: BuiltinMetricConfigOption[]
+}
+
 export interface BuiltinMetricDef {
   key: BuiltinMetricKey
   label: string
   unit: string
   configurable: boolean
-  config_fields?: { key: string; label: string; default: string }[]
+  config_fields?: BuiltinMetricConfigField[]
   command_template?: string | null
 }
 
@@ -251,7 +270,7 @@ export interface UnifiedScript {
   // builtin_metric 専用
   builtinKey?: BuiltinMetricKey
   unit?: string
-  configFields?: { key: string; label: string; default: string }[]
+  configFields?: BuiltinMetricConfigField[]
   // job_template 専用
   category?: string
   defaultCron?: string

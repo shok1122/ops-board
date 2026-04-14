@@ -137,12 +137,25 @@ async def get_system_status(
     }
 
 
+# mem_used の unit_type 別コマンド（collect_metric で動的選択）
+_MEM_USED_COMMANDS: dict[str, str] = {
+    "pct": "free | awk '/^Mem:/{{printf \"%.1f\", $3/$2*100}}'",
+    "mb":  "free | awk '/^Mem:/{{print $3}}'",
+}
+
 BUILTIN_METRIC_COMMANDS: dict[str, str] = {
+    # ── 統合メトリクス（変数選択対応）────────────────────────────────────
+    # cpu_load: {awk_field} は collect_metric 内で interval → $1/$2/$3 に変換
+    "cpu_load":      "awk '{{print {awk_field}}}' /proc/loadavg",
+    # mem_used: collect_metric 内で unit_type に応じてコマンドを切り替え
+    "mem_used":      _MEM_USED_COMMANDS["pct"],
+    # ── 個別キー（後方互換のため保持、UI には表示しない）──────────────
     "cpu_load_1m":   "awk '{print $1}' /proc/loadavg",
     "cpu_load_5m":   "awk '{print $2}' /proc/loadavg",
     "cpu_load_15m":  "awk '{print $3}' /proc/loadavg",
     "mem_used_pct":  "free | awk '/^Mem:/{{printf \"%.1f\", $3/$2*100}}'",
     "mem_used_mb":   "free | awk '/^Mem:/{{print $3}}'",
+    # ── その他 ───────────────────────────────────────────────────────────
     "disk_used_pct": "df {path} | awk 'NR==2{{print $5}}' | tr -d '%'",
     "disk_used_gb":  "df -BG {path} | awk 'NR==2{{gsub(/G/,\"\"); print $3}}'",
     "process_count": "ps aux | wc -l",
@@ -176,6 +189,13 @@ async def collect_metric(
             config.setdefault("path", "/")
             config.setdefault("host", host)
             config.setdefault("port", "443")
+            # cpu_load: interval (1m/5m/15m) → awk フィールド番号に変換
+            if builtin_key == "cpu_load":
+                _field_map = {"1m": "$1", "5m": "$2", "15m": "$3"}
+                config["awk_field"] = _field_map.get(config.get("interval", "1m"), "$1")
+            # mem_used: unit_type (pct/mb) に応じてコマンドを切り替え
+            elif builtin_key == "mem_used":
+                template = _MEM_USED_COMMANDS.get(config.get("unit_type", "pct"), _MEM_USED_COMMANDS["pct"])
             command = template.format(**config)
     else:
         if not custom_script:

@@ -265,26 +265,67 @@ async def get_monitor_data(
 
 @router.get("/builtin-metrics/list")
 async def list_builtin_metrics():
-    from app.ssh import BUILTIN_METRIC_COMMANDS
+    from app.ssh import BUILTIN_METRIC_COMMANDS, _MEM_USED_COMMANDS
     defaults = {
-        "cpu_load_1m":   {"label": "CPU Load (1m)",   "unit": "",   "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_1m"]},
-        "cpu_load_5m":   {"label": "CPU Load (5m)",   "unit": "",   "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_5m"]},
-        "cpu_load_15m":  {"label": "CPU Load (15m)",  "unit": "",   "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["cpu_load_15m"]},
-        "mem_used_pct":  {"label": "Memory Usage",    "unit": "%",  "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["mem_used_pct"]},
-        "mem_used_mb":   {"label": "Memory Used",     "unit": "MB", "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["mem_used_mb"]},
-        "disk_used_pct": {"label": "Disk Usage",      "unit": "%",  "configurable": True,
-                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
-                          "command_template": BUILTIN_METRIC_COMMANDS["disk_used_pct"]},
-        "disk_used_gb":  {"label": "Disk Used",       "unit": "GB", "configurable": True,
-                          "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
-                          "command_template": BUILTIN_METRIC_COMMANDS["disk_used_gb"]},
-        "process_count": {"label": "Process Count",   "unit": "",   "configurable": False,
-                          "command_template": BUILTIN_METRIC_COMMANDS["process_count"]},
+        # ── 統合メトリクス（変数選択対応）────────────────────────────────
+        "cpu_load": {
+            "label": "CPU Load",
+            "unit": "",
+            "configurable": True,
+            "config_fields": [
+                {
+                    "key": "interval",
+                    "label": "計測間隔",
+                    "default": "1m",
+                    "type": "select",
+                    "options": [
+                        {"value": "1m",  "label": "1分",  "resolved_command": "awk '{print $1}' /proc/loadavg"},
+                        {"value": "5m",  "label": "5分",  "resolved_command": "awk '{print $2}' /proc/loadavg"},
+                        {"value": "15m", "label": "15分", "resolved_command": "awk '{print $3}' /proc/loadavg"},
+                    ],
+                }
+            ],
+            "command_template": None,  # 動的生成のため非表示
+        },
+        "mem_used": {
+            "label": "Memory Used",
+            "unit": "%",
+            "configurable": True,
+            "config_fields": [
+                {
+                    "key": "unit_type",
+                    "label": "単位",
+                    "default": "pct",
+                    "type": "select",
+                    "options": [
+                        {"value": "pct", "label": "% (使用率)",  "unit": "%",  "resolved_command": _MEM_USED_COMMANDS["pct"].replace("{{", "{").replace("}}", "}")},
+                        {"value": "mb",  "label": "MB (使用量)", "unit": "MB", "resolved_command": _MEM_USED_COMMANDS["mb"].replace("{{", "{").replace("}}", "}")},
+                    ],
+                }
+            ],
+            "command_template": None,  # 動的生成のため非表示
+        },
+        # ── その他 ────────────────────────────────────────────────────────
+        "disk_used_pct": {
+            "label": "Disk Usage",
+            "unit": "%",
+            "configurable": True,
+            "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
+            "command_template": BUILTIN_METRIC_COMMANDS["disk_used_pct"],
+        },
+        "disk_used_gb": {
+            "label": "Disk Used",
+            "unit": "GB",
+            "configurable": True,
+            "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
+            "command_template": BUILTIN_METRIC_COMMANDS["disk_used_gb"],
+        },
+        "process_count": {
+            "label": "Process Count",
+            "unit": "",
+            "configurable": False,
+            "command_template": BUILTIN_METRIC_COMMANDS["process_count"],
+        },
         "ssl_cert_expiry_days": {
             "label": "SSL Cert Expiry",
             "unit": "日",
