@@ -279,16 +279,18 @@ async def get_server_job_results(server_id: str):
         # This applies to both command (stdout of the command) and
         # log_fetch (contents of the JSON file).
         if row["stdout"]:
-            try:
-                obj = json.loads(row["stdout"].strip())
-                if isinstance(obj, dict):
-                    output = JobResultOutput(**{
-                        k: v for k, v in obj.items()
-                        if k in JobResultOutput.model_fields
-                    })
-                    raw_stdout = None
-            except (json.JSONDecodeError, Exception):
-                pass
+            lines = [line for line in row["stdout"].splitlines() if line.strip()]
+            if lines:
+                try:
+                    obj = json.loads(lines[-1])
+                    if isinstance(obj, dict):
+                        output = JobResultOutput(**{
+                            k: v for k, v in obj.items()
+                            if k in JobResultOutput.model_fields
+                        })
+                        raw_stdout = None
+                except (json.JSONDecodeError, Exception):
+                    pass
 
         results.append(ServerJobResult(
             job_id=row["job_id"],

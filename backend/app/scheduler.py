@@ -8,12 +8,15 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.database import get_db, new_id, now_iso
 def _parse_job_output(stdout: str) -> dict | None:
-    """Try to parse stdout as a JobResultOutput JSON object.
-    Returns the parsed dict on success, or None if not valid JSON / not a dict."""
+    """出力の最後の非空行を JSON としてパースする。
+    有効な JSON オブジェクトであれば dict を返し、そうでなければ None を返す。"""
     if not stdout:
         return None
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
     try:
-        obj = json.loads(stdout.strip())
+        obj = json.loads(lines[-1])
         if isinstance(obj, dict):
             return obj
     except (json.JSONDecodeError, ValueError):
