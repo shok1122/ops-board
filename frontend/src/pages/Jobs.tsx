@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Pencil, Play, ToggleLeft, ToggleRight, Loader2, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { getJobs, createJob, updateJob, deleteJob, triggerJob, toggleJob, getServers } from '../api/client'
-import type { Job, JobCreate, Server, UnifiedScript } from '../types'
+import type { Job, JobCreate, Server, UnifiedScript, JobTemplateConfigField } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import { ScriptPickerButton } from '../components/ScriptPicker'
 import { formatDistanceToNow } from 'date-fns'
@@ -13,6 +13,16 @@ const emptyForm: JobCreate = {
   name: '', description: '', server_id: '',
   type: 'command', command: '', log_path: '',
   cron_expr: '0 * * * *', enabled: true, timeout_sec: 30,
+}
+
+/** {key} プレースホルダーをコンフィグ値で置換する（{{}} はリテラルブレース） */
+function resolveTemplateScript(template: string, config: Record<string, string>, defaults: Record<string, string>): string {
+  return template
+    .replace(/\{\{/g, '\x00')
+    .replace(/\}\}/g, '\x01')
+    .replace(/\{(\w+)\}/g, (_, key) => config[key] ?? defaults[key] ?? `{${key}}`)
+    .replace(/\x00/g, '{')
+    .replace(/\x01/g, '}')
 }
 
 const CRON_PRESETS = [
@@ -33,6 +43,10 @@ export default function Jobs() {
   const [modal, setModal] = useState<{ open: boolean; editing?: Job }>({ open: false })
   const [form, setForm] = useState<JobCreate>(emptyForm)
   const [triggering, setTriggering] = useState<string | null>(null)
+  // テンプレートのパラメータ設定用
+  const [templateConfigFields, setTemplateConfigFields] = useState<JobTemplateConfigField[]>([])
+  const [templateConfig, setTemplateConfig] = useState<Record<string, string>>({})
+  const [templateBaseScript, setTemplateBaseScript] = useState<string>('')
 
   const createMut = useMutation({
     mutationFn: createJob,
@@ -53,6 +67,9 @@ export default function Jobs() {
 
   const openCreate = (serverId?: string) => {
     setForm({ ...emptyForm, server_id: serverId ?? servers?.items[0]?.id ?? '' })
+    setTemplateConfigFields([])
+    setTemplateConfig({})
+    setTemplateBaseScript('')
     setModal({ open: true })
   }
   const openEdit = (j: Job) => {
@@ -61,24 +78,44 @@ export default function Jobs() {
       type: j.type, command: j.command ?? '', log_path: j.log_path ?? '',
       cron_expr: j.cron_expr, enabled: j.enabled, timeout_sec: j.timeout_sec,
     })
+    setTemplateConfigFields([])
+    setTemplateConfig({})
+    setTemplateBaseScript('')
     setModal({ open: true, editing: j })
   }
   const closeModal = () => { setModal({ open: false }) }
 
   const handleScriptSelect = (s: UnifiedScript) => {
     if (s.source === 'job_template') {
+      const fields = s.templateConfigFields ?? []
+      const defaults = Object.fromEntries(fields.map(f => [f.key, f.default]))
+      const resolvedCommand = resolveTemplateScript(s.content, defaults, defaults)
+      setTemplateConfigFields(fields)
+      setTemplateConfig(defaults)
+      setTemplateBaseScript(s.content)
       setForm(f => ({
         ...f,
         name: f.name || s.name,
         description: f.description || s.description || '',
         type: 'command',
-        command: s.content,
+        command: resolvedCommand,
         cron_expr: s.defaultCron ?? f.cron_expr,
         timeout_sec: s.defaultTimeout ?? f.timeout_sec,
       }))
     } else {
+      setTemplateConfigFields([])
+      setTemplateConfig({})
+      setTemplateBaseScript('')
       setForm(f => ({ ...f, command: s.content }))
     }
+  }
+
+  const handleTemplateConfigChange = (key: string, value: string) => {
+    const newConfig = { ...templateConfig, [key]: value }
+    setTemplateConfig(newConfig)
+    const defaults = Object.fromEntries(templateConfigFields.map(f => [f.key, f.default]))
+    const resolvedCommand = resolveTemplateScript(templateBaseScript, newConfig, defaults)
+    setForm(f => ({ ...f, command: resolvedCommand }))
   }
 
   const handleTrigger = async (id: string) => {
@@ -242,11 +279,43 @@ export default function Jobs() {
                       onSelect={handleScriptSelect}
                     />
                   </div>
+
+                  {/* テンプレートのパラメータ設定 */}
+                  {templateConfigFields.length > 0 && (
+                    <div className="mb-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 space-y-2">
+                      <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide">パラメータ設定</p>
+                      {templateConfigFields.map(cf => (
+                        <div key={cf.key}>
+                          <label className="block text-xs font-medium text-gray-700 mb-0.5">{cf.label}</label>
+                          {cf.type === 'select' && cf.options ? (
+                            <select
+                              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                              value={templateConfig[cf.key] ?? cf.default}
+                              onChange={e => handleTemplateConfigChange(cf.key, e.target.value)}
+                            >
+                              {cf.options.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder={cf.default || `例: ${cf.label}`}
+                              value={templateConfig[cf.key] ?? cf.default}
+                              onChange={e => handleTemplateConfigChange(cf.key, e.target.value)}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <textarea
                     required
                     rows={4}
                     value={form.command ?? ''}
-                    onChange={e => setForm(f => ({ ...f, command: e.target.value }))}
+                    onChange={e => setForm((f: JobCreate) => ({ ...f, command: e.target.value }))}
                     className="input font-mono text-xs resize-y"
                     placeholder="/opt/scripts/backup.sh"
                   />

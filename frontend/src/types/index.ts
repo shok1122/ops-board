@@ -133,6 +133,19 @@ export interface JobResultOutput {
 
 export type TemplateLanguage = 'bash' | 'ruby' | 'python'
 
+export interface JobTemplateConfigOption {
+  value: string
+  label: string
+}
+
+export interface JobTemplateConfigField {
+  key: string
+  label: string
+  default: string
+  type?: 'text' | 'select'
+  options?: JobTemplateConfigOption[]
+}
+
 export interface JobTemplate {
   id: string
   name: string
@@ -144,6 +157,7 @@ export interface JobTemplate {
   default_cron: string
   default_timeout: number
   tags: string[]
+  config_fields: JobTemplateConfigField[]
 }
 
 // ── Monitors ─────────────────────────────────────────────────────────────────
@@ -275,4 +289,5 @@ export interface UnifiedScript {
   category?: string
   defaultCron?: string
   defaultTimeout?: number
+  templateConfigFields?: JobTemplateConfigField[]
 }

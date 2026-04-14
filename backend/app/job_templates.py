@@ -23,6 +23,30 @@ Language = Literal["bash", "ruby", "python"]
 
 
 @dataclass
+class JobTemplateConfigOption:
+    value: str
+    label: str
+
+    def to_dict(self) -> dict:
+        return {"value": self.value, "label": self.label}
+
+
+@dataclass
+class JobTemplateConfigField:
+    key: str
+    label: str
+    default: str
+    type: str = "text"  # "text" | "select"
+    options: list[JobTemplateConfigOption] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        d: dict = {"key": self.key, "label": self.label, "default": self.default, "type": self.type}
+        if self.options:
+            d["options"] = [o.to_dict() for o in self.options]
+        return d
+
+
+@dataclass
 class JobTemplate:
     id: str
     name: str
@@ -33,6 +57,7 @@ class JobTemplate:
     default_cron: str = "0 * * * *"
     default_timeout: int = 60
     tags: list[str] = field(default_factory=list)
+    config_fields: list[JobTemplateConfigField] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -46,6 +71,7 @@ class JobTemplate:
             "default_cron": self.default_cron,
             "default_timeout": self.default_timeout,
             "tags": self.tags,
+            "config_fields": [cf.to_dict() for cf in self.config_fields],
         }
 
 
@@ -167,17 +193,35 @@ printf '{"title":"CPU負荷","status":"%s","value":%s,"unit":"","message":"1分:
     JobTemplate(
         id="http-health-check",
         name="HTTP ヘルスチェック",
-        description="指定 URL に HTTP リクエストを送り、ステータスコードを確認します",
+        description="対象サーバ（REMOTE_HOST）に HTTP リクエストを送り、ステータスコードを確認します",
         category="network",
         language="bash",
         default_cron="*/5 * * * *",
         default_timeout=30,
         tags=["http", "web", "health"],
+        config_fields=[
+            JobTemplateConfigField(
+                key="scheme",
+                label="プロトコル",
+                default="http",
+                type="select",
+                options=[
+                    JobTemplateConfigOption(value="http",  label="HTTP"),
+                    JobTemplateConfigOption(value="https", label="HTTPS"),
+                ],
+            ),
+            JobTemplateConfigField(
+                key="path",
+                label="パス",
+                default="",
+            ),
+        ],
         script="""\
 #!/bin/bash
 # HTTP ヘルスチェック
-# 確認対象の URL を変更してください
-URL="http://localhost:80/"
+# 対象サーバは REMOTE_HOST 環境変数から自動取得します（未設定時は localhost）
+TARGET_HOST="${REMOTE_HOST:-localhost}"
+URL="{scheme}://$TARGET_HOST/{path}"
 TIMEOUT=10
 
 http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$URL" 2>/dev/null)

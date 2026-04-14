@@ -4,7 +4,7 @@ import { Search, X, BookOpen, Lock } from 'lucide-react'
 import { getScripts, getBuiltinMetrics, getJobTemplates } from '../api/client'
 import type {
   Script, BuiltinMetricDef, JobTemplate,
-  UnifiedScript, ScriptLanguage,
+  UnifiedScript, ScriptLanguage, JobTemplateConfigField,
 } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     category: t.category,
     defaultCron: t.default_cron,
     defaultTimeout: t.default_timeout,
+    templateConfigFields: t.config_fields?.length ? t.config_fields : undefined,
   }
 }
 
@@ -254,6 +255,11 @@ export function ScriptPickerModal({
                   {selected.configFields && selected.configFields.length > 0 && (
                     <p className="text-xs text-indigo-600">
                       設定可能: {selected.configFields.map(f => f.label).join(', ')}
+                    </p>
+                  )}
+                  {selected.templateConfigFields && selected.templateConfigFields.length > 0 && (
+                    <p className="text-xs text-indigo-600">
+                      パラメータ: {selected.templateConfigFields.map((f: JobTemplateConfigField) => f.label).join(', ')}
                     </p>
                   )}
                   {selected.defaultCron && (
