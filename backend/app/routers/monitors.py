@@ -290,11 +290,11 @@ async def list_builtin_metrics():
             "unit": "日",
             "configurable": True,
             "config_fields": [{"key": "port", "label": "HTTPS port", "default": "443"}],
-            "command_template": None,  # TLS直接接続のためコマンドなし
+            "command_template": BUILTIN_METRIC_COMMANDS["ssl_cert_expiry_days"],
         },
     }
     return [
         {"key": k, **v}
         for k, v in defaults.items()
-        if k in BUILTIN_METRIC_COMMANDS or k == "ssl_cert_expiry_days"
+        if k in BUILTIN_METRIC_COMMANDS
     ]

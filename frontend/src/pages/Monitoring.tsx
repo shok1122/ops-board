@@ -22,7 +22,9 @@ import type {
   MonitorDataPoint,
   BuiltinMetricDef,
   BuiltinMetricKey,
+  UnifiedScript,
 } from '../types'
+import { ScriptPickerButton } from '../components/ScriptPicker'
 
 // ── Chart card ────────────────────────────────────────────────────────────────
 
@@ -178,13 +180,22 @@ const EMPTY_FORM: MonitorCreate = {
   server_id: '',
   interval_minutes: 5,
   enabled: true,
-  metric_type: 'builtin',
-  builtin_key: 'cpu_load_1m',
+  metric_type: 'custom',
+  builtin_key: undefined,
   builtin_config: {},
   custom_script: '',
   unit: '',
   warning_threshold: undefined,
   critical_threshold: undefined,
+}
+
+/** 編集時にビルトインの表示名を引く */
+function resolveInitialScriptName(initial: MonitorCreate | null, builtins: BuiltinMetricDef[]): string {
+  if (!initial) return ''
+  if (initial.metric_type === 'builtin') {
+    return builtins.find(b => b.key === initial.builtin_key)?.label ?? initial.builtin_key ?? ''
+  }
+  return initial.custom_script ? 'カスタムスクリプト' : ''
 }
 
 function MonitorModal({
@@ -205,10 +216,14 @@ function MonitorModal({
   const [intervalState, setIntervalState] = useState(() =>
     fromMinutes((initial ?? EMPTY_FORM).interval_minutes)
   )
+  const [selectedScriptName, setSelectedScriptName] = useState(() =>
+    resolveInitialScriptName(initial, builtins)
+  )
 
-  const selectedBuiltin = builtins.find(b => b.key === form.builtin_key)
+  const selectedBuiltin = form.metric_type === 'builtin'
+    ? builtins.find(b => b.key === form.builtin_key)
+    : undefined
 
-  // ビルトインコマンドのデフォルト (config適用済み)
   const defaultConfigValues = Object.fromEntries(
     selectedBuiltin?.config_fields?.map(f => [f.key, f.default]) ?? []
   )
@@ -218,9 +233,8 @@ function MonitorModal({
   const commandOverride = (form.builtin_config ?? {})['command_override'] as string | undefined
 
   const handleCommandChange = (val: string) => {
-    const trimmed = val.trim()
     const cfg = { ...(form.builtin_config ?? {}) }
-    if (!trimmed || trimmed === resolvedDefaultCmd) {
+    if (!val.trim() || val.trim() === resolvedDefaultCmd) {
       delete cfg['command_override']
     } else {
       cfg['command_override'] = val
@@ -235,6 +249,29 @@ function MonitorModal({
 
   const setField = <K extends keyof MonitorCreate>(k: K, v: MonitorCreate[K]) =>
     setForm(f => ({ ...f, [k]: v }))
+
+  /** スクリプトピッカーで選択されたとき */
+  const handleScriptSelect = (s: UnifiedScript) => {
+    setSelectedScriptName(s.name)
+    if (s.source === 'builtin_metric' && s.builtinKey) {
+      setForm(f => ({
+        ...f,
+        metric_type: 'builtin',
+        builtin_key: s.builtinKey as BuiltinMetricKey,
+        builtin_config: {},
+        custom_script: '',
+        unit: f.unit || s.unit || '',
+      }))
+    } else {
+      setForm(f => ({
+        ...f,
+        metric_type: 'custom',
+        builtin_key: undefined,
+        builtin_config: {},
+        custom_script: s.content,
+      }))
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -256,6 +293,8 @@ function MonitorModal({
     }
   }
 
+  const hasScript = form.metric_type === 'builtin' ? !!form.builtin_key : !!form.custom_script
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
@@ -265,16 +304,83 @@ function MonitorModal({
           </h2>
         </div>
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-5 space-y-4 text-sm max-h-[70vh] overflow-y-auto">
+          <div className="px-6 py-5 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
+
+            {/* Script selector */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">スクリプト *</label>
+              <div className="flex items-center gap-2">
+                <div className={`flex-1 rounded-lg border px-3 py-2 text-sm truncate ${hasScript ? 'border-gray-200 text-gray-800' : 'border-dashed border-gray-300 text-gray-400'}`}>
+                  {selectedScriptName || (hasScript ? (form.metric_type === 'builtin' ? form.builtin_key : 'カスタムスクリプト') : '未選択')}
+                </div>
+                <ScriptPickerButton
+                  context="monitor"
+                  onSelect={handleScriptSelect}
+                  label="選択"
+                />
+              </div>
+
+              {/* Builtin config fields */}
+              {selectedBuiltin?.configurable && selectedBuiltin.config_fields?.map(cf => (
+                <div key={cf.key} className="mt-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">{cf.label}</label>
+                  <input
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder={cf.default}
+                    value={(form.builtin_config ?? {})[cf.key] ?? ''}
+                    onChange={e => {
+                      const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
+                      delete cfg['command_override']
+                      setField('builtin_config', cfg)
+                    }}
+                  />
+                </div>
+              ))}
+
+              {/* Command editor (builtin) */}
+              {resolvedDefaultCmd !== null && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    実行コマンド
+                    {commandOverride && <span className="ml-2 text-[10px] text-amber-600 font-normal">カスタム編集済み</span>}
+                    <button type="button" onClick={() => handleCommandChange(resolvedDefaultCmd ?? '')}
+                      className="ml-2 text-[10px] text-indigo-500 hover:underline font-normal">
+                      デフォルトに戻す
+                    </button>
+                  </label>
+                  <textarea rows={2}
+                    className={`w-full rounded-lg border px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${commandOverride ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}
+                    value={commandOverride ?? resolvedDefaultCmd ?? ''}
+                    onChange={e => handleCommandChange(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* Custom script editor */}
+              {form.metric_type === 'custom' && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    スクリプト内容
+                    <span className="ml-1 font-normal text-gray-400">(標準出力に数値1つを出力)</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={5}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder={"#!/bin/bash\nps -o rss= -p $(pgrep nginx | head -1) | awk '{printf \"%.1f\", $1/1024}'"}
+                    value={form.custom_script ?? ''}
+                    onChange={e => setField('custom_script', e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+
             {/* Name */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">名前 *</label>
-              <input
-                required
+              <input required
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.name}
-                onChange={e => setField('name', e.target.value)}
-              />
+                value={form.name} onChange={e => setField('name', e.target.value)} />
             </div>
 
             {/* Description */}
@@ -282,140 +388,19 @@ function MonitorModal({
               <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
               <input
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.description ?? ''}
-                onChange={e => setField('description', e.target.value)}
-              />
+                value={form.description ?? ''} onChange={e => setField('description', e.target.value)} />
             </div>
 
             {/* Server */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">サーバー *</label>
-              <select
-                required
+              <select required
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.server_id}
-                onChange={e => setField('server_id', e.target.value)}
-              >
+                value={form.server_id} onChange={e => setField('server_id', e.target.value)}>
                 <option value="">選択してください</option>
-                {servers.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+                {servers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-
-            {/* Metric type */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">メトリクス種別</label>
-              <div className="flex gap-3">
-                {(['builtin', 'custom'] as const).map(t => (
-                  <label key={t} className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="metric_type"
-                      value={t}
-                      checked={form.metric_type === t}
-                      onChange={() => setField('metric_type', t)}
-                    />
-                    <span>{t === 'builtin' ? 'ビルトイン' : 'カスタムスクリプト'}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Builtin key */}
-            {form.metric_type === 'builtin' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">メトリクス *</label>
-                <select
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={form.builtin_key ?? ''}
-                  onChange={e => {
-                    const key = e.target.value as BuiltinMetricKey
-                    const def = builtins.find(b => b.key === key)
-                    setForm(f => ({
-                      ...f,
-                      builtin_key: key,
-                      unit: f.unit || def?.unit || '',
-                      builtin_config: {},  // command_override も含めてリセット
-                    }))
-                  }}
-                >
-                  {builtins.map(b => (
-                    <option key={b.key} value={b.key}>{b.label} ({b.unit || 'no unit'})</option>
-                  ))}
-                </select>
-
-                {/* Configurable fields (e.g., disk path) */}
-                {selectedBuiltin?.configurable && selectedBuiltin.config_fields?.map(cf => (
-                  <div key={cf.key} className="mt-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{cf.label}</label>
-                    <input
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      placeholder={cf.default}
-                      value={(form.builtin_config ?? {})[cf.key] ?? ''}
-                      onChange={e => {
-                        const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
-                        // コンフィグ変更時はコマンド上書きをリセット
-                        delete cfg['command_override']
-                        setField('builtin_config', cfg)
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {/* ssl_cert_expiry_days: コマンドなし説明 */}
-                {selectedBuiltin && 'command_template' in selectedBuiltin && selectedBuiltin.command_template === null && (
-                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                    このメトリクスはTLS直接接続で証明書の有効期限を取得します（シェルコマンドなし）
-                  </div>
-                )}
-
-                {/* コマンド編集 (ssl_cert_expiry_days 以外) */}
-                {resolvedDefaultCmd !== null && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      実行コマンド
-                      {commandOverride && (
-                        <span className="ml-2 text-[10px] text-amber-600 font-normal">カスタム編集済み</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleCommandChange(resolvedDefaultCmd ?? '')}
-                        className="ml-2 text-[10px] text-indigo-500 hover:underline font-normal"
-                      >
-                        デフォルトに戻す
-                      </button>
-                    </label>
-                    <textarea
-                      rows={2}
-                      className={`w-full rounded-lg border px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                        commandOverride ? 'border-amber-300 bg-amber-50' : 'border-gray-200'
-                      }`}
-                      value={commandOverride ?? resolvedDefaultCmd ?? ''}
-                      onChange={e => handleCommandChange(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Custom script */}
-            {form.metric_type === 'custom' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  スクリプト * <span className="text-gray-400 font-normal">(標準出力に数値1つを出力してください)</span>
-                </label>
-                <textarea
-                  required
-                  rows={5}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder={"#!/bin/bash\n# 例: 特定プロセスのメモリ(MB)\nps -o rss= -p $(pgrep nginx | head -1) | awk '{printf \"%.1f\", $1/1024}'"}
-                  value={form.custom_script ?? ''}
-                  onChange={e => setField('custom_script', e.target.value)}
-                />
-              </div>
-            )}
 
             {/* Unit */}
             <div>
@@ -423,35 +408,25 @@ function MonitorModal({
               <input
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder={selectedBuiltin?.unit ?? '例: %, MB, GB'}
-                value={form.unit ?? ''}
-                onChange={e => setField('unit', e.target.value)}
-              />
+                value={form.unit ?? ''} onChange={e => setField('unit', e.target.value)} />
             </div>
 
             {/* Interval */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">収集間隔</label>
               <div className="flex gap-2">
-                <input
-                  type="number"
-                  min={1}
+                <input type="number" min={1}
                   max={intervalState.unit === 'day' ? 31 : intervalState.unit === 'hour' ? 744 : 44640}
                   className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={intervalState.value}
-                  onChange={e => handleIntervalChange(Math.max(1, Number(e.target.value)), intervalState.unit)}
-                />
-                <select
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={intervalState.unit}
-                  onChange={e => handleIntervalChange(intervalState.value, e.target.value as IntervalUnit)}
-                >
+                  onChange={e => handleIntervalChange(Math.max(1, Number(e.target.value)), intervalState.unit)} />
+                <select className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={intervalState.unit} onChange={e => handleIntervalChange(intervalState.value, e.target.value as IntervalUnit)}>
                   <option value="min">分</option>
                   <option value="hour">時間</option>
                   <option value="day">日</option>
                 </select>
-                <span className="self-center text-xs text-gray-400">
-                  = {form.interval_minutes}分
-                </span>
+                <span className="self-center text-xs text-gray-400">= {form.interval_minutes}分</span>
               </div>
             </div>
 
@@ -459,52 +434,34 @@ function MonitorModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">警告閾値</label>
-                <input
-                  type="number"
-                  step="any"
+                <input type="number" step="any"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="なし"
-                  value={form.warning_threshold ?? ''}
-                  onChange={e => setField('warning_threshold', e.target.value ? Number(e.target.value) : undefined)}
-                />
+                  placeholder="なし" value={form.warning_threshold ?? ''}
+                  onChange={e => setField('warning_threshold', e.target.value ? Number(e.target.value) : undefined)} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">危険閾値</label>
-                <input
-                  type="number"
-                  step="any"
+                <input type="number" step="any"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="なし"
-                  value={form.critical_threshold ?? ''}
-                  onChange={e => setField('critical_threshold', e.target.value ? Number(e.target.value) : undefined)}
-                />
+                  placeholder="なし" value={form.critical_threshold ?? ''}
+                  onChange={e => setField('critical_threshold', e.target.value ? Number(e.target.value) : undefined)} />
               </div>
             </div>
 
             {/* Enabled */}
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={e => setField('enabled', e.target.checked)}
-              />
+              <input type="checkbox" checked={form.enabled} onChange={e => setField('enabled', e.target.checked)} />
               <span className="text-sm">有効にする</span>
             </label>
           </div>
 
           <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-            >
+            <button type="button" onClick={onClose}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
               キャンセル
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-            >
+            <button type="submit" disabled={saving}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
               {saving ? '保存中...' : '保存'}
             </button>
           </div>

@@ -209,3 +209,51 @@ export interface ServerJobResult {
   output?: JobResultOutput
   raw_stdout?: string
 }
+
+// ── Scripts ──────────────────────────────────────────────────────────────────
+
+export type ScriptLanguage = 'bash' | 'python' | 'ruby'
+
+export interface Script {
+  id: string
+  name: string
+  description?: string
+  language: ScriptLanguage
+  content: string
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ScriptCreate {
+  name: string
+  description?: string
+  language: ScriptLanguage
+  content: string
+  tags?: string[]
+}
+
+/**
+ * Scripts / BuiltinMetrics / JobTemplates を統合した表示用型。
+ * source によって読み取り専用かどうか、選択時の挙動が変わる。
+ */
+export type ScriptSource = 'user' | 'builtin_metric' | 'job_template'
+
+export interface UnifiedScript {
+  id: string
+  name: string
+  description?: string
+  language: ScriptLanguage
+  content: string          // コマンドテンプレート or スクリプト本体
+  tags: string[]
+  source: ScriptSource
+  readonly: boolean        // true = 編集・削除不可
+  // builtin_metric 専用
+  builtinKey?: BuiltinMetricKey
+  unit?: string
+  configFields?: { key: string; label: string; default: string }[]
+  // job_template 専用
+  category?: string
+  defaultCron?: string
+  defaultTimeout?: number
+}

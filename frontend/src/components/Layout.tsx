@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle, LogOut, TrendingUp,
+  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle, LogOut, TrendingUp, Code2,
 } from 'lucide-react'
 import { exportConfig, importConfig } from '../api/client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -13,6 +13,7 @@ const nav = [
   { to: '/monitoring', label: 'モニタリング', icon: TrendingUp },
   { to: '/jobs', label: 'ジョブ', icon: Calendar },
   { to: '/executions', label: '実行履歴', icon: History },
+  { to: '/scripts', label: 'スクリプト', icon: Code2 },
 ]
 
 export default function Layout() {

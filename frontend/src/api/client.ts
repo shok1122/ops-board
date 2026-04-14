@@ -6,6 +6,7 @@ import type {
   PagedResponse, AppSettings,
   Monitor, MonitorCreate, MonitorDataPoint, BuiltinMetricDef,
   JobTemplate,
+  Script, ScriptCreate,
 } from '../types'
 
 const TOKEN_KEY = 'opsboard_token'
@@ -147,6 +148,19 @@ export const getBuiltinMetrics = () =>
 // Job Templates
 export const getJobTemplates = () =>
   api.get<JobTemplate[]>('/job-templates').then(r => r.data)
+
+// Scripts
+export const getScripts = (language?: string) =>
+  api.get<Script[]>('/scripts', { params: language ? { language } : undefined }).then(r => r.data)
+
+export const createScript = (data: ScriptCreate) =>
+  api.post<Script>('/scripts', data).then(r => r.data)
+
+export const updateScript = (id: string, data: Partial<ScriptCreate>) =>
+  api.put<Script>(`/scripts/${id}`, data).then(r => r.data)
+
+export const deleteScript = (id: string) =>
+  api.delete(`/scripts/${id}`)
 
 // Dashboard stats (derived from existing endpoints)
 export const getDashboardStats = async () => {

@@ -241,6 +241,35 @@ class MonitorDataPoint(BaseModel):
     error: Optional[str] = None
 
 
+# ── Scripts ──────────────────────────────────────────────────────────────────
+
+class ScriptCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    language: Literal["bash", "python", "ruby"] = "bash"
+    content: str
+    tags: Optional[list[str]] = None
+
+
+class ScriptUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    language: Optional[Literal["bash", "python", "ruby"]] = None
+    content: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class ScriptOut(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    language: str
+    content: str
+    tags: list[str]
+    created_at: str
+    updated_at: str
+
+
 # ── Pagination ────────────────────────────────────────────────────────────────
 
 class PagedResponse(BaseModel):

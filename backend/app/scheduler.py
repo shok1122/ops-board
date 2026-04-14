@@ -365,16 +365,21 @@ async def _collect_monitor(monitor_id: str):
     builtin_config = _json.loads(monitor["builtin_config"]) if monitor["builtin_config"] else None
 
     try:
-        # SSL証明書チェックはサーバータイプに関わらず直接TLS接続
-        if monitor["metric_type"] == "builtin" and monitor["builtin_key"] == "ssl_cert_expiry_days":
+        config = builtin_config or {}
+        # ssl_cert_expiry_days でコマンド上書きなし → TLS直接接続
+        use_tls_direct = (
+            monitor["metric_type"] == "builtin"
+            and monitor["builtin_key"] == "ssl_cert_expiry_days"
+            and "command_override" not in config
+        )
+
+        if use_tls_direct:
             from app.cert import check_ssl_certificate
-            config = builtin_config or {}
             port = int(config.get("port", monitor["port"] or 443))
             value, error = await check_ssl_certificate(monitor["host"], port=port)
         elif monitor["server_type"] == "no_ssh":
             # SSH不要サーバー: コマンドをローカルで実行し REMOTE_HOST を渡す
             from app.ssh import run_local_command
-            config = builtin_config or {}
             if monitor["metric_type"] == "custom" and monitor["custom_script"]:
                 command = monitor["custom_script"]
             elif monitor["metric_type"] == "builtin" and "command_override" in config:

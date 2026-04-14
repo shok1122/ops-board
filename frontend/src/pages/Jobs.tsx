@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Play, ToggleLeft, ToggleRight, Loader2, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, Pencil, Play, ToggleLeft, ToggleRight, Loader2, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { getJobs, createJob, updateJob, deleteJob, triggerJob, toggleJob, getServers, getJobTemplates } from '../api/client'
-import type { Job, JobCreate, Server, JobTemplate } from '../types'
+import { getJobs, createJob, updateJob, deleteJob, triggerJob, toggleJob, getServers } from '../api/client'
+import type { Job, JobCreate, Server, UnifiedScript } from '../types'
 import StatusBadge from '../components/StatusBadge'
+import { ScriptPickerButton } from '../components/ScriptPicker'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -23,102 +24,14 @@ const CRON_PRESETS = [
   { label: '毎週月曜', value: '0 9 * * 1' },
 ]
 
-const LANG_COLORS: Record<string, string> = {
-  bash:   'bg-green-100 text-green-700',
-  python: 'bg-blue-100 text-blue-700',
-  ruby:   'bg-red-100 text-red-700',
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  system:  'システム',
-  network: 'ネットワーク',
-  process: 'プロセス',
-  log:     'ログ',
-  example: 'サンプル',
-}
-
-// ── Template selector ─────────────────────────────────────────────────────────
-
-function TemplateSelector({
-  templates,
-  selectedId,
-  onSelect,
-}: {
-  templates: JobTemplate[]
-  selectedId: string | null
-  onSelect: (t: JobTemplate) => void
-}) {
-  const [open, setOpen] = useState(true)
-
-  const categories = Array.from(new Set(templates.map(t => t.category)))
-
-  return (
-    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-indigo-700"
-      >
-        <span>システム定義テンプレート</span>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-
-      {open && (
-        <div className="border-t border-indigo-100 px-4 pb-4 pt-3 space-y-4">
-          {categories.map(cat => (
-            <div key={cat}>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {CATEGORY_LABELS[cat] ?? cat}
-              </p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {templates.filter(t => t.category === cat).map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => onSelect(t)}
-                    className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                      selectedId === t.id
-                        ? 'border-indigo-400 bg-indigo-100'
-                        : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800">{t.name}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${LANG_COLORS[t.language] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {t.language}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{t.description}</p>
-                    </div>
-                    {selectedId === t.id && (
-                      <span className="text-xs text-indigo-600 font-medium shrink-0 mt-0.5">選択中</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Jobs() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs() })
   const { data: servers } = useQuery({ queryKey: ['servers'], queryFn: getServers })
-  const { data: templates = [] } = useQuery<JobTemplate[]>({
-    queryKey: ['job-templates'],
-    queryFn: getJobTemplates,
-    staleTime: Infinity,
-  })
   const [modal, setModal] = useState<{ open: boolean; editing?: Job }>({ open: false })
   const [form, setForm] = useState<JobCreate>(emptyForm)
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [triggering, setTriggering] = useState<string | null>(null)
 
   const createMut = useMutation({
@@ -140,7 +53,6 @@ export default function Jobs() {
 
   const openCreate = (serverId?: string) => {
     setForm({ ...emptyForm, server_id: serverId ?? servers?.items[0]?.id ?? '' })
-    setSelectedTemplateId(null)
     setModal({ open: true })
   }
   const openEdit = (j: Job) => {
@@ -149,22 +61,24 @@ export default function Jobs() {
       type: j.type, command: j.command ?? '', log_path: j.log_path ?? '',
       cron_expr: j.cron_expr, enabled: j.enabled, timeout_sec: j.timeout_sec,
     })
-    setSelectedTemplateId(null)
     setModal({ open: true, editing: j })
   }
-  const closeModal = () => { setModal({ open: false }); setSelectedTemplateId(null) }
+  const closeModal = () => { setModal({ open: false }) }
 
-  const handleSelectTemplate = (t: JobTemplate) => {
-    setSelectedTemplateId(t.id)
-    setForm(f => ({
-      ...f,
-      name: t.name,
-      description: t.description,
-      type: 'command',
-      command: t.command,
-      cron_expr: t.default_cron,
-      timeout_sec: t.default_timeout,
-    }))
+  const handleScriptSelect = (s: UnifiedScript) => {
+    if (s.source === 'job_template') {
+      setForm(f => ({
+        ...f,
+        name: f.name || s.name,
+        description: f.description || s.description || '',
+        type: 'command',
+        command: s.content,
+        cron_expr: s.defaultCron ?? f.cron_expr,
+        timeout_sec: s.defaultTimeout ?? f.timeout_sec,
+      }))
+    } else {
+      setForm(f => ({ ...f, command: s.content }))
+    }
   }
 
   const handleTrigger = async (id: string) => {
@@ -294,15 +208,6 @@ export default function Jobs() {
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Template selector — create mode only */}
-              {!modal.editing && templates.length > 0 && (
-                <TemplateSelector
-                  templates={templates}
-                  selectedId={selectedTemplateId}
-                  onSelect={handleSelectTemplate}
-                />
-              )}
-
               <Field label="ジョブ名 *">
                 <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="input" placeholder="バックアップ実行" />
@@ -331,19 +236,20 @@ export default function Jobs() {
               </Field>
               {form.type === 'command' ? (
                 <Field label="コマンド *">
+                  <div className="flex justify-end mb-1.5">
+                    <ScriptPickerButton
+                      context="job"
+                      onSelect={handleScriptSelect}
+                    />
+                  </div>
                   <textarea
                     required
-                    rows={selectedTemplateId ? 8 : 2}
+                    rows={4}
                     value={form.command ?? ''}
                     onChange={e => setForm(f => ({ ...f, command: e.target.value }))}
                     className="input font-mono text-xs resize-y"
                     placeholder="/opt/scripts/backup.sh"
                   />
-                  {selectedTemplateId && (
-                    <p className="text-xs text-indigo-600 mt-1">
-                      テンプレートのスクリプトが設定されています。スクリプト内のコメントを参考に編集してください。
-                    </p>
-                  )}
                 </Field>
               ) : (
                 <Field label="JSONファイルパス *">

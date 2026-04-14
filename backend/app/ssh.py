@@ -146,6 +146,7 @@ BUILTIN_METRIC_COMMANDS: dict[str, str] = {
     "disk_used_pct": "df {path} | awk 'NR==2{{print $5}}' | tr -d '%'",
     "disk_used_gb":  "df -BG {path} | awk 'NR==2{{gsub(/G/,\"\"); print $3}}'",
     "process_count": "ps aux | wc -l",
+    "ssl_cert_expiry_days": r"""echo | openssl s_client -connect {host}:{port} -servername {host} 2>/dev/null | openssl x509 -noout -enddate | awk -F= '{{cmd="date -d \""$2"\" +%s"; cmd | getline exp; close(cmd); print int((exp-systime())/86400)}}'""",
 }
 
 
@@ -173,6 +174,8 @@ async def collect_metric(
         else:
             template = BUILTIN_METRIC_COMMANDS[builtin_key]
             config.setdefault("path", "/")
+            config.setdefault("host", host)
+            config.setdefault("port", "443")
             command = template.format(**config)
     else:
         if not custom_script:
