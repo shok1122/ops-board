@@ -10,6 +10,45 @@ import asyncssh
 from app.builtin_monitors import BUILTIN_METRIC_COMMANDS, BUILTIN_MONITOR_REGISTRY
 
 
+def resolve_command(
+    metric_type: str,
+    builtin_key: Optional[str],
+    builtin_config: Optional[dict],
+    custom_script: Optional[str],
+    host: str,
+) -> tuple[Optional[str], Optional[str]]:
+    """metric_type に応じて実行コマンドを解決する。(command, error) を返す。"""
+    if metric_type == "builtin":
+        if not builtin_key:
+            return None, "No builtin_key provided"
+        if builtin_key == "mem_used":
+            unit_type = (builtin_config or {}).get("unit_type", "pct")
+            actual_key = f"mem_used_{unit_type}" if f"mem_used_{unit_type}" in BUILTIN_METRIC_COMMANDS else "mem_used_pct"
+            template = BUILTIN_METRIC_COMMANDS[actual_key]
+        elif builtin_key not in BUILTIN_METRIC_COMMANDS:
+            return None, f"Unknown builtin metric key: {builtin_key}"
+        else:
+            template = BUILTIN_METRIC_COMMANDS[builtin_key]
+        config = {**(builtin_config or {})}
+        entry = BUILTIN_MONITOR_REGISTRY.get(builtin_key, {})
+        for cf in entry.get("config_fields", []):
+            selected_val = config.get(cf["key"], cf.get("default", ""))
+            for opt in cf.get("options", []):
+                if opt["value"] == selected_val:
+                    for k, v in opt.items():
+                        if k not in ("value", "label") and k not in config:
+                            config[k] = v
+                    break
+        config.setdefault("path", "/")
+        config.setdefault("host", host)
+        config.setdefault("port", "443")
+        return _expand_template(template, config), None
+    else:
+        if not custom_script:
+            return None, "No custom script provided"
+        return custom_script, None
+
+
 def _expand_template(template: str, config: dict) -> str:
     """{key} プレースホルダーを config の値で置換する。
 
@@ -155,6 +194,20 @@ async def get_system_status(
 
 
 
+def format_raw_log(stdout: str, stderr: str, command: str = "") -> str:
+    """Combine command, stdout, and stderr into a human-readable log string."""
+    parts: list[str] = []
+    if command:
+        parts.append(f"$ {command}")
+    out = stdout.rstrip()
+    err = stderr.rstrip()
+    if out:
+        parts.append(out)
+    if err:
+        parts.append(f"[stderr]\n{err}")
+    return "\n\n".join(parts)
+
+
 async def collect_metric(
     host: str,
     port: int,
@@ -167,62 +220,26 @@ async def collect_metric(
     private_key: Optional[str] = None,
     passphrase: Optional[str] = None,
     timeout: float = 15.0,
-) -> tuple[Optional[float], Optional[str]]:
-    """Collect a single metric value via SSH. Returns (value, error)."""
-    if metric_type == "builtin":
-        if not builtin_key:
-            return None, "No builtin_key provided"
-
-        # Backward compat: mem_used composite key routes to the correct sub-script
-        if builtin_key == "mem_used":
-            unit_type = (builtin_config or {}).get("unit_type", "pct")
-            actual_key = f"mem_used_{unit_type}" if f"mem_used_{unit_type}" in BUILTIN_METRIC_COMMANDS else "mem_used_pct"
-            template = BUILTIN_METRIC_COMMANDS[actual_key]
-        elif builtin_key not in BUILTIN_METRIC_COMMANDS:
-            return None, f"Unknown builtin metric key: {builtin_key}"
-        else:
-            template = BUILTIN_METRIC_COMMANDS[builtin_key]
-
-        config = {**(builtin_config or {})}
-
-        # command_override が指定されていればそれを使う
-        if "command_override" in config:
-            command = config["command_override"]
-        else:
-            # スクリプトの @config_option に定義された追加パラメータをconfigに注入する
-            # （例: cpu_load の interval=1m → awk_field=$1）
-            entry = BUILTIN_MONITOR_REGISTRY.get(builtin_key, {})
-            for cf in entry.get("config_fields", []):
-                selected_val = config.get(cf["key"], cf.get("default", ""))
-                for opt in cf.get("options", []):
-                    if opt["value"] == selected_val:
-                        for k, v in opt.items():
-                            if k not in ("value", "label") and k not in config:
-                                config[k] = v
-                        break
-
-            config.setdefault("path", "/")
-            config.setdefault("host", host)
-            config.setdefault("port", "443")
-            command = _expand_template(template, config)
-    else:
-        if not custom_script:
-            return None, "No custom script provided"
-        command = custom_script
+) -> tuple[Optional[float], Optional[str], str]:
+    """Collect a single metric value via SSH. Returns (value, error, raw_log)."""
+    command, err = resolve_command(metric_type, builtin_key, builtin_config, custom_script, host)
+    if err:
+        return None, err, ""
 
     result = await run_command(
         host, port, username, command,
         password=password, private_key=private_key, passphrase=passphrase,
         timeout=timeout,
     )
+    raw_log = format_raw_log(result.stdout, result.stderr, command)
     if result.exit_code != 0:
         error = result.stderr.strip() or f"Exit code {result.exit_code}"
-        return None, error
+        return None, error, raw_log
     try:
         value = float(result.stdout.strip())
-        return value, None
+        return value, None, raw_log
     except (ValueError, TypeError):
-        return None, f"Could not parse output as number: {result.stdout.strip()[:100]}"
+        return None, f"Could not parse output as number: {result.stdout.strip()[:100]}", raw_log
 
 
 async def run_local_command(

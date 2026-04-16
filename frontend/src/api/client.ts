@@ -4,7 +4,7 @@ import type {
   Job, JobCreate,
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
-  Monitor, MonitorCreate, MonitorDataPoint, BuiltinMetricDef,
+  Monitor, MonitorCreate, MonitorDataPoint, MonitorLastLog, BuiltinMetricDef,
   JobTemplate,
   Script, ScriptCreate,
 } from '../types'
@@ -141,6 +141,9 @@ export const triggerMonitor = (id: string) =>
 
 export const getMonitorData = (id: string, hours = 24, limit = 500) =>
   api.get<MonitorDataPoint[]>(`/monitors/${id}/data`, { params: { hours, limit } }).then(r => r.data)
+
+export const getMonitorLastLog = (id: string) =>
+  api.get<MonitorLastLog>(`/monitors/${id}/last-log`).then(r => r.data)
 
 export const getBuiltinMetrics = () =>
   api.get<BuiltinMetricDef[]>('/monitors/builtin-metrics/list').then(r => r.data)

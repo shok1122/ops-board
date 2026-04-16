@@ -138,6 +138,13 @@ async def init_db():
         if "file_path" not in script_cols:
             await db.execute("ALTER TABLE scripts ADD COLUMN file_path TEXT")
             await db.commit()
+        # マイグレーション: monitors テーブルに last_log カラムが存在しない場合は追加
+        cur = await db.execute("PRAGMA table_info(monitors)")
+        monitor_cols = [row[1] for row in await cur.fetchall()]
+        if "last_log" not in monitor_cols:
+            await db.execute("ALTER TABLE monitors ADD COLUMN last_log TEXT")
+            await db.execute("ALTER TABLE monitors ADD COLUMN last_log_at TEXT")
+            await db.commit()
 
 
 @asynccontextmanager

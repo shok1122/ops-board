@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { Plus, Pencil, Trash2, Play, Power, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, Play, Power, AlertTriangle, TrendingUp, ScrollText, X } from 'lucide-react'
 import {
   getServers,
   getMonitors,
@@ -14,12 +14,14 @@ import {
   toggleMonitor,
   triggerMonitor,
   getMonitorData,
+  getMonitorLastLog,
 } from '../api/client'
 import type {
   Server,
   Monitor,
   MonitorCreate,
   MonitorDataPoint,
+  MonitorLastLog,
   BuiltinMetricDef,
   BuiltinMetricKey,
   UnifiedScript,
@@ -162,14 +164,49 @@ function formatInterval(minutes: number): string {
   return `${value}分`
 }
 
-/** Python format string ({path}, {{literal}}) をコンフィグ値で解決して返す */
-function resolveCommandTemplate(template: string, config: Record<string, string>, defaults: Record<string, string>): string {
-  return template
-    .replace(/\{\{/g, '\x00')
-    .replace(/\}\}/g, '\x01')
-    .replace(/\{(\w+)\}/g, (_, key) => config[key] ?? defaults[key] ?? `{${key}}`)
-    .replace(/\x00/g, '{')
-    .replace(/\x01/g, '}')
+// ── Log modal ─────────────────────────────────────────────────────────────────
+
+function MonitorLogModal({ monitor, onClose }: { monitor: Monitor; onClose: () => void }) {
+  const { data, isLoading } = useQuery<MonitorLastLog>({
+    queryKey: ['monitor-last-log', monitor.id],
+    queryFn: () => getMonitorLastLog(monitor.id),
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="font-semibold text-gray-900">実行ログ（直近1回）</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{monitor.name}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-6 flex flex-col gap-3 overflow-hidden">
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+            </div>
+          ) : (
+            <>
+              {data?.last_log_at ? (
+                <p className="text-xs text-gray-400 shrink-0">
+                  収集時刻: {new Date(data.last_log_at).toLocaleString('ja-JP')}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400 shrink-0">まだ収集されていません</p>
+              )}
+              <pre className="bg-gray-950 text-gray-100 text-xs font-mono rounded-xl p-4 overflow-auto whitespace-pre-wrap break-words flex-1 min-h-[4rem]">
+                {data?.log || '(出力なし)'}
+              </pre>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -223,38 +260,6 @@ function MonitorModal({
   const selectedBuiltin = form.metric_type === 'builtin'
     ? builtins.find(b => b.key === form.builtin_key)
     : undefined
-
-  const defaultConfigValues = Object.fromEntries(
-    selectedBuiltin?.config_fields?.map(f => [f.key, f.default]) ?? []
-  )
-
-  /** select 型フィールドの選択中オプションから resolved_command を取得 */
-  const getSelectResolvedCommand = (): string | null => {
-    if (!selectedBuiltin?.config_fields) return null
-    for (const cf of selectedBuiltin.config_fields) {
-      if (cf.type === 'select' && cf.options) {
-        const currentVal = (form.builtin_config ?? {})[cf.key] ?? cf.default
-        const opt = cf.options.find(o => o.value === currentVal)
-        if (opt?.resolved_command) return opt.resolved_command
-      }
-    }
-    return null
-  }
-
-  const resolvedDefaultCmd = selectedBuiltin?.command_template
-    ? resolveCommandTemplate(selectedBuiltin.command_template, form.builtin_config ?? {}, defaultConfigValues)
-    : getSelectResolvedCommand()
-  const commandOverride = (form.builtin_config ?? {})['command_override'] as string | undefined
-
-  const handleCommandChange = (val: string) => {
-    const cfg = { ...(form.builtin_config ?? {}) }
-    if (!val.trim() || val.trim() === resolvedDefaultCmd) {
-      delete cfg['command_override']
-    } else {
-      cfg['command_override'] = val
-    }
-    setField('builtin_config', cfg)
-  }
 
   const handleIntervalChange = (value: number, unit: IntervalUnit) => {
     setIntervalState({ value, unit })
@@ -345,7 +350,6 @@ function MonitorModal({
                       onChange={e => {
                         const val = e.target.value
                         const cfg = { ...(form.builtin_config ?? {}), [cf.key]: val }
-                        delete cfg['command_override']
                         setField('builtin_config', cfg)
                         // select オプションに unit が定義されていれば form.unit を自動更新
                         const opt = cf.options!.find(o => o.value === val)
@@ -365,32 +369,12 @@ function MonitorModal({
                       value={(form.builtin_config ?? {})[cf.key] ?? ''}
                       onChange={e => {
                         const cfg = { ...(form.builtin_config ?? {}), [cf.key]: e.target.value || cf.default }
-                        delete cfg['command_override']
                         setField('builtin_config', cfg)
                       }}
                     />
                   )}
                 </div>
               ))}
-
-              {/* Command editor (builtin) */}
-              {resolvedDefaultCmd !== null && (
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    実行コマンド
-                    {commandOverride && <span className="ml-2 text-[10px] text-amber-600 font-normal">カスタム編集済み</span>}
-                    <button type="button" onClick={() => handleCommandChange(resolvedDefaultCmd ?? '')}
-                      className="ml-2 text-[10px] text-indigo-500 hover:underline font-normal">
-                      デフォルトに戻す
-                    </button>
-                  </label>
-                  <textarea rows={2}
-                    className={`w-full rounded-lg border px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${commandOverride ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}
-                    value={commandOverride ?? resolvedDefaultCmd ?? ''}
-                    onChange={e => handleCommandChange(e.target.value)}
-                  />
-                </div>
-              )}
 
               {/* Custom script editor */}
               {form.metric_type === 'custom' && (
@@ -514,6 +498,7 @@ export default function Monitoring() {
   const [selectedServerId, setSelectedServerId] = useState<string>('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Monitor | null>(null)
+  const [logMonitor, setLogMonitor] = useState<Monitor | null>(null)
 
   const { data: serversData } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const servers = serversData?.items ?? []
@@ -646,6 +631,13 @@ export default function Monitoring() {
                         <Play className="h-3.5 w-3.5" />
                       </button>
                       <button
+                        title="実行ログ"
+                        onClick={() => setLogMonitor(m)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600"
+                      >
+                        <ScrollText className="h-3.5 w-3.5" />
+                      </button>
+                      <button
                         title={m.enabled ? '無効にする' : '有効にする'}
                         onClick={() => toggleMut.mutate({ id: m.id, enabled: !m.enabled })}
                         className={`p-1 rounded hover:bg-gray-100 ${m.enabled ? 'text-green-500 hover:text-gray-500' : 'text-gray-400 hover:text-green-500'}`}
@@ -681,7 +673,7 @@ export default function Monitoring() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Edit modal */}
       {modalOpen && (
         <MonitorModal
           servers={servers}
@@ -689,6 +681,14 @@ export default function Monitoring() {
           initial={editTarget}
           onSave={handleSave}
           onClose={() => setModalOpen(false)}
+        />
+      )}
+
+      {/* Log modal */}
+      {logMonitor && (
+        <MonitorLogModal
+          monitor={logMonitor}
+          onClose={() => setLogMonitor(null)}
         />
       )}
     </div>

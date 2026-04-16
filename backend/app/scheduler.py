@@ -367,32 +367,22 @@ async def _collect_monitor(monitor_id: str):
 
     builtin_config = _json.loads(monitor["builtin_config"]) if monitor["builtin_config"] else None
 
+    raw_log = ""
     try:
         config = builtin_config or {}
-        # ssl_cert_expiry_days でコマンド上書きなし → TLS直接接続
-        use_tls_direct = (
-            monitor["metric_type"] == "builtin"
-            and monitor["builtin_key"] == "ssl_cert_expiry_days"
-            and "command_override" not in config
-        )
-
-        if use_tls_direct:
-            from app.cert import check_ssl_certificate
-            port = int(config.get("port", monitor["port"] or 443))
-            value, error = await check_ssl_certificate(monitor["host"], port=port)
-        elif monitor["server_type"] == "no_ssh":
+        if monitor["server_type"] == "no_ssh":
             # SSH不要サーバー: コマンドをローカルで実行し REMOTE_HOST を渡す
-            from app.ssh import run_local_command
-            if monitor["metric_type"] == "custom" and monitor["custom_script"]:
-                command = monitor["custom_script"]
-            elif monitor["metric_type"] == "builtin" and "command_override" in config:
-                command = config["command_override"]
-            else:
+            from app.ssh import run_local_command, format_raw_log, resolve_command
+            command, resolve_error = resolve_command(
+                monitor["metric_type"], monitor["builtin_key"],
+                builtin_config, monitor["custom_script"], monitor["host"],
+            )
+            if resolve_error:
                 value = None
-                error = "SSH不要サーバーではカスタムスクリプトまたはコマンド上書きが必要です (ssl_cert_expiry_days を除く)"
-                command = None
-            if command:
+                error = resolve_error
+            else:
                 result = await run_local_command(command, remote_host=monitor["host"])
+                raw_log = format_raw_log(result.stdout, result.stderr, command)
                 if result.exit_code != 0:
                     value = None
                     error = result.stderr.strip() or f"Exit code {result.exit_code}"
@@ -407,7 +397,7 @@ async def _collect_monitor(monitor_id: str):
             password = decrypt(monitor["password_enc"]) if monitor["password_enc"] else None
             private_key = decrypt(monitor["private_key_enc"]) if monitor["private_key_enc"] else None
             passphrase = decrypt(monitor["passphrase_enc"]) if monitor["passphrase_enc"] else None
-            value, error = await collect_metric(
+            value, error, raw_log = await collect_metric(
                 monitor["host"], monitor["port"], monitor["username"],
                 metric_type=monitor["metric_type"],
                 builtin_key=monitor["builtin_key"],
@@ -424,6 +414,10 @@ async def _collect_monitor(monitor_id: str):
             "INSERT INTO monitor_data (id, monitor_id, collected_at, value, error, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (new_id(), monitor_id, now, value, error, now),
+        )
+        await db.execute(
+            "UPDATE monitors SET last_log = ?, last_log_at = ? WHERE id = ?",
+            (raw_log or None, now, monitor_id),
         )
         await db.commit()
     logger.debug("Monitor %s collected value=%s error=%s", monitor_id, value, error)

@@ -229,6 +229,12 @@ class MonitorDataPoint(BaseModel):
     error: Optional[str] = None
 
 
+class MonitorLastLog(BaseModel):
+    monitor_id: str
+    last_log_at: Optional[str] = None
+    log: Optional[str] = None
+
+
 # ── Scripts ──────────────────────────────────────────────────────────────────
 
 class ScriptCreate(BaseModel):

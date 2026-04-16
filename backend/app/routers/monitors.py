@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.database import get_db, new_id, now_iso
-from app.models import MonitorCreate, MonitorUpdate, MonitorOut, MonitorDataPoint
+from app.models import MonitorCreate, MonitorUpdate, MonitorOut, MonitorDataPoint, MonitorLastLog
 from app.builtin_monitors import BUILTIN_METRIC_COMMANDS, BUILTIN_MONITOR_REGISTRY
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
@@ -227,6 +227,23 @@ async def trigger_monitor(monitor_id: str):
     from app.scheduler import _collect_monitor
     asyncio.create_task(_collect_monitor(monitor_id))
     return {"message": "Collection triggered"}
+
+
+@router.get("/{monitor_id}/last-log", response_model=MonitorLastLog)
+async def get_monitor_last_log(monitor_id: str):
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT id, last_log, last_log_at FROM monitors WHERE id = ?",
+            (monitor_id,),
+        )
+        row = await cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    return MonitorLastLog(
+        monitor_id=monitor_id,
+        last_log_at=row["last_log_at"],
+        log=row["last_log"],
+    )
 
 
 @router.get("/{monitor_id}/data", response_model=list[MonitorDataPoint])

@@ -133,10 +133,19 @@ async def test_server(server_id: str):
     server_type = row["server_type"] if "server_type" in row.keys() else "ssh"
 
     if server_type == "no_ssh":
-        from app.cert import check_ssl_certificate
-        days, error = await check_ssl_certificate(row["host"], port=row["port"])
-        ok = error is None and days is not None and days > 0
-        return TestResult(ok=ok, cert_expiry_days=days, error=error)
+        import asyncio
+        port = row["port"] or 443
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(row["host"], port), timeout=10.0
+            )
+            writer.close()
+            await writer.wait_closed()
+            return TestResult(ok=True)
+        except asyncio.TimeoutError:
+            return TestResult(ok=False, error=f"接続タイムアウト (10秒)")
+        except Exception as e:
+            return TestResult(ok=False, error=str(e))
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None

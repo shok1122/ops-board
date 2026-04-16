@@ -233,6 +233,12 @@ export interface MonitorDataPoint {
   error?: string
 }
 
+export interface MonitorLastLog {
+  monitor_id: string
+  last_log_at: string | null
+  log: string | null
+}
+
 export interface ServerJobResult {
   job_id: string
   job_name: string
