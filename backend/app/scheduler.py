@@ -388,7 +388,8 @@ async def _collect_monitor(monitor_id: str):
                     error = result.stderr.strip() or f"Exit code {result.exit_code}"
                 else:
                     try:
-                        value = float(result.stdout.strip())
+                        last_line = result.stdout.splitlines()[-1].strip() if result.stdout.strip() else ""
+                        value = float(last_line)
                         error = None
                     except (ValueError, TypeError):
                         value = None
