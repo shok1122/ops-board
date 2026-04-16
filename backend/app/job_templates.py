@@ -1,233 +1,142 @@
 """
-System-defined job templates.
+Auto-discovery loader for builtin job-template scripts.
 
-To add a new template, append a JobTemplate instance to TEMPLATES at the bottom
-of this file.  No other changes are required.
+Every script file under ``scripts/jobs/`` whose leading comment block
+contains a ``# @name ...`` line is automatically registered as a job
+template.  No changes to this file are needed when adding new scripts.
 
-Guidelines:
-  - id: unique snake_case string
-  - language: "bash" | "ruby" | "python"
-  - script_file: filename under backend/app/scripts/builtin/ (without directory path)
-  - The framework loads the script body from the file at runtime.
-  - The framework wraps the script in a heredoc automatically before SSH execution.
-  - Output JSON in the JobResultOutput format for rich display in the UI:
-      {"title":"...", "status":"ok|warn|error", "value":42, "unit":"%",
-       "message":"...", "items":[{"label":"...","value":"...","unit":"...","status":"..."}]}
-  - If the script just prints plain text that's fine too (displays as raw output).
+Metadata comment format (``# @key value``)
+-------------------------------------------
+``@name``            (required) Display name shown in the UI.
+``@description``     Human-readable description.
+``@category``        Category string (default ``"custom"``).
+``@default_cron``    5-field cron expression (default ``"0 * * * *"``).
+``@default_timeout`` Timeout in seconds (default ``60``).
+``@tags``            Comma-separated tag list.
+``@config_field``    Config-field descriptor (repeatable) – see below.
+``@config_option``   Option descriptor for ``type=select`` fields (repeatable).
+
+``@config_field`` format::
+
+    # @config_field key=scheme label="プロトコル" type=select default=http
+    # @config_option scheme http HTTP
+    # @config_option scheme https HTTPS
+
+``@config_option`` format::
+
+    fieldkey  optionvalue  ["label with spaces" | label]
+
+Supported languages
+-------------------
+``.sh``  → bash
+``.py``  → python3
+``.rb``  → ruby
+
+The template ID is derived from the filename without its extension.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Literal
 
-Language = Literal["bash", "ruby", "python"]
+import logging
+from pathlib import Path
+
+from app.script_meta import parse_meta, parse_config_fields
+
+logger = logging.getLogger(__name__)
 
 BUILTIN_SCRIPTS_DIR = Path(__file__).parent / "scripts" / "jobs"
 
-_EXT: dict[Language, str] = {"bash": "sh", "python": "py", "ruby": "rb"}
+_EXT_TO_LANGUAGE: dict[str, str] = {
+    ".sh": "bash",
+    ".py": "python",
+    ".rb": "ruby",
+}
+
+_RUNNERS: dict[str, str] = {
+    "bash":   "bash",
+    "python": "python3",
+    "ruby":   "ruby",
+}
 
 
-def _load_script(template_id: str, language: Language) -> str:
-    ext = _EXT[language]
-    path = BUILTIN_SCRIPTS_DIR / f"{template_id}.{ext}"
-    return path.read_text(encoding="utf-8")
-
-
-@dataclass
-class JobTemplateConfigOption:
-    value: str
-    label: str
-
-    def to_dict(self) -> dict:
-        return {"value": self.value, "label": self.label}
-
-
-@dataclass
-class JobTemplateConfigField:
-    key: str
-    label: str
-    default: str
-    type: str = "text"  # "text" | "select"
-    options: list[JobTemplateConfigOption] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        d: dict = {"key": self.key, "label": self.label, "default": self.default, "type": self.type}
-        if self.options:
-            d["options"] = [o.to_dict() for o in self.options]
-        return d
-
-
-@dataclass
-class JobTemplate:
-    id: str
-    name: str
-    description: str
-    category: str
-    language: Language
-    default_cron: str = "0 * * * *"
-    default_timeout: int = 60
-    tags: list[str] = field(default_factory=list)
-    config_fields: list[JobTemplateConfigField] = field(default_factory=list)
-
-    @property
-    def script(self) -> str:
-        return _load_script(self.id, self.language)
-
-    def to_dict(self) -> dict:
-        script = self.script
-        return {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "category": self.category,
-            "language": self.language,
-            "script": script,
-            "command": _make_command(self.language, script),
-            "default_cron": self.default_cron,
-            "default_timeout": self.default_timeout,
-            "tags": self.tags,
-            "config_fields": [cf.to_dict() for cf in self.config_fields],
-        }
-
-
-def _make_command(language: Language, script: str) -> str:
-    """Wrap a script in a heredoc suitable for SSH execution."""
-    runners = {"bash": "bash", "ruby": "ruby", "python": "python3"}
-    runner = runners[language]
+def _make_command(language: str, script: str) -> str:
+    """Wrap a script body in a heredoc suitable for SSH execution."""
+    runner = _RUNNERS[language]
     return f"{runner} <<'__OPSBOARD__'\n{script}\n__OPSBOARD__"
 
 
+def _load_templates() -> list[dict]:
+    templates: list[dict] = []
+    for path in sorted(BUILTIN_SCRIPTS_DIR.iterdir()):
+        if path.suffix not in _EXT_TO_LANGUAGE:
+            continue
+        language = _EXT_TO_LANGUAGE[path.suffix]
+        template_id = path.stem
+
+        try:
+            script = path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning("Could not read job script %s: %s", path, e)
+            continue
+
+        meta = parse_meta(path)
+        name = meta.get("name", "")
+        if not name:
+            logger.debug("Skipping %s: no @name metadata", path.name)
+            continue
+
+        config_fields = parse_config_fields(meta)
+
+        raw_tags = meta.get("tags", "")
+        tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
+
+        try:
+            default_timeout = int(meta.get("default_timeout", "60"))
+        except ValueError:
+            default_timeout = 60
+
+        templates.append(
+            {
+                "id":              template_id,
+                "name":            name,
+                "description":     meta.get("description", ""),
+                "category":        meta.get("category", "custom"),
+                "language":        language,
+                "script":          script,
+                "command":         _make_command(language, script),
+                "default_cron":    meta.get("default_cron", "0 * * * *"),
+                "default_timeout": default_timeout,
+                "tags":            tags,
+                "config_fields":   [
+                    {
+                        "key":     cf["key"],
+                        "label":   cf["label"],
+                        "type":    cf["type"],
+                        "default": cf["default"],
+                        **({"options": [
+                            {"value": o["value"], "label": o["label"]}
+                            for o in cf["options"]
+                        ]} if cf["options"] else {}),
+                    }
+                    for cf in config_fields
+                ],
+            }
+        )
+        logger.debug("Registered job template: %s (%s)", template_id, language)
+
+    return templates
+
+
+# Loaded once at import time.
+_TEMPLATES: list[dict] = _load_templates()
+
+
 def get_all() -> list[dict]:
-    return [t.to_dict() for t in TEMPLATES]
+    return list(_TEMPLATES)
 
 
 def get_by_id(template_id: str) -> dict | None:
-    for t in TEMPLATES:
-        if t.id == template_id:
-            return t.to_dict()
+    for t in _TEMPLATES:
+        if t["id"] == template_id:
+            return t
     return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Templates
-# ─────────────────────────────────────────────────────────────────────────────
-
-TEMPLATES: list[JobTemplate] = [
-
-    # ── System ────────────────────────────────────────────────────────────────
-
-    JobTemplate(
-        id="disk-usage-root",
-        name="ディスク使用率チェック (/)",
-        description="ルートパーティション (/) のディスク使用率を確認します",
-        category="system",
-        language="bash",
-        default_cron="0 * * * *",
-        default_timeout=15,
-        tags=["disk", "system"],
-    ),
-
-    JobTemplate(
-        id="memory-usage",
-        name="メモリ使用率チェック",
-        description="システムのメモリ（RAM）使用率を確認します",
-        category="system",
-        language="bash",
-        default_cron="*/15 * * * *",
-        default_timeout=10,
-        tags=["memory", "system"],
-    ),
-
-    JobTemplate(
-        id="cpu-load",
-        name="CPU負荷確認",
-        description="CPU ロードアベレージ（1分・5分・15分）を確認します",
-        category="system",
-        language="bash",
-        default_cron="*/5 * * * *",
-        default_timeout=10,
-        tags=["cpu", "system"],
-    ),
-
-    # ── Network ───────────────────────────────────────────────────────────────
-
-    JobTemplate(
-        id="http-health-check",
-        name="HTTP ヘルスチェック",
-        description="対象サーバ（REMOTE_HOST）に HTTP リクエストを送り、ステータスコードを確認します",
-        category="network",
-        language="bash",
-        default_cron="*/5 * * * *",
-        default_timeout=30,
-        tags=["http", "web", "health"],
-        config_fields=[
-            JobTemplateConfigField(
-                key="scheme",
-                label="プロトコル",
-                default="http",
-                type="select",
-                options=[
-                    JobTemplateConfigOption(value="http",  label="HTTP"),
-                    JobTemplateConfigOption(value="https", label="HTTPS"),
-                ],
-            ),
-            JobTemplateConfigField(
-                key="path",
-                label="パス",
-                default="",
-            ),
-        ],
-    ),
-
-    # ── Process ───────────────────────────────────────────────────────────────
-
-    JobTemplate(
-        id="process-check",
-        name="プロセス死活確認",
-        description="指定したプロセス名が実行中かどうかを確認します",
-        category="process",
-        language="bash",
-        default_cron="*/5 * * * *",
-        default_timeout=10,
-        tags=["process", "availability"],
-    ),
-
-    # ── Log ───────────────────────────────────────────────────────────────────
-
-    JobTemplate(
-        id="log-error-count",
-        name="ログエラー件数チェック",
-        description="指定ログファイルの直近 1000 行から ERROR/CRITICAL 行数をカウントします",
-        category="log",
-        language="bash",
-        default_cron="0 * * * *",
-        default_timeout=20,
-        tags=["log", "error"],
-    ),
-
-    # ── Examples ──────────────────────────────────────────────────────────────
-
-    JobTemplate(
-        id="python-example",
-        name="Python スクリプト例",
-        description="Python スクリプトのサンプルです。カスタムスクリプト作成の出発点として使用してください",
-        category="example",
-        language="python",
-        default_cron="0 9 * * *",
-        default_timeout=30,
-        tags=["example", "python"],
-    ),
-
-    JobTemplate(
-        id="ruby-example",
-        name="Ruby スクリプト例",
-        description="Ruby スクリプトのサンプルです。カスタムスクリプト作成の出発点として使用してください",
-        category="example",
-        language="ruby",
-        default_cron="0 9 * * *",
-        default_timeout=30,
-        tags=["example", "ruby"],
-    ),
-
-]

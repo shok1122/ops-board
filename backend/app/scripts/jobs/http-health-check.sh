@@ -1,5 +1,14 @@
 #!/bin/bash
-# HTTP ヘルスチェック
+# @name HTTP ヘルスチェック
+# @description 対象サーバ（REMOTE_HOST）に HTTP リクエストを送り、ステータスコードを確認します
+# @category network
+# @default_cron */5 * * * *
+# @default_timeout 30
+# @tags http,web,health
+# @config_field key=scheme label="プロトコル" type=select default=http
+# @config_option scheme http HTTP
+# @config_option scheme https HTTPS
+# @config_field key=path label="パス" type=text default=
 # 対象サーバは REMOTE_HOST 環境変数から自動取得します（未設定時は localhost）
 TARGET_HOST="${REMOTE_HOST:-localhost}"
 URL="{scheme}://$TARGET_HOST/{path}"

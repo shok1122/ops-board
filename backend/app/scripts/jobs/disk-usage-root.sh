@@ -1,6 +1,10 @@
 #!/bin/bash
-# ディスク使用率チェック (/)
-# 確認対象のパスを変更するには下の PATH= を編集してください
+# @name ディスク使用率チェック (/)
+# @description ルートパーティション (/) のディスク使用率を確認します
+# @category system
+# @default_cron 0 * * * *
+# @default_timeout 15
+# @tags disk,system
 TARGET_PATH="/"
 
 pct=$(df "$TARGET_PATH" | awk 'NR==2{gsub(/%/,""); print $5}')

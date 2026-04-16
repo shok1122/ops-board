@@ -1,6 +1,10 @@
 #!/bin/bash
-# ログエラー件数チェック
-# 確認対象のログファイルパスを変更してください
+# @name ログエラー件数チェック
+# @description 指定ログファイルの直近 1000 行から ERROR/CRITICAL 行数をカウントします
+# @category log
+# @default_cron 0 * * * *
+# @default_timeout 20
+# @tags log,error
 LOG_FILE="/var/log/syslog"
 # エラーとみなすパターン（grep の拡張正規表現）
 ERROR_PATTERN="ERROR|CRITICAL|FATAL"

@@ -7,12 +7,7 @@ from typing import Optional
 
 import asyncssh
 
-_MONITOR_SCRIPTS_DIR = Path(__file__).parent / "scripts" / "monitors"
-
-
-def _load_monitor_cmd(name: str) -> str:
-    """scripts/monitors/{name}.sh の内容を読み込んで返す（末尾の空白を除去）。"""
-    return (_MONITOR_SCRIPTS_DIR / f"{name}.sh").read_text(encoding="utf-8").strip()
+from app.builtin_monitors import BUILTIN_METRIC_COMMANDS, BUILTIN_MONITOR_REGISTRY
 
 
 def _expand_template(template: str, config: dict) -> str:
@@ -159,32 +154,6 @@ async def get_system_status(
     }
 
 
-# mem_used の unit_type 別コマンド（collect_metric で動的選択）
-# scripts/monitors/mem_used_pct.sh / mem_used_mb.sh から読み込む
-_MEM_USED_COMMANDS: dict[str, str] = {
-    "pct": _load_monitor_cmd("mem_used_pct"),
-    "mb":  _load_monitor_cmd("mem_used_mb"),
-}
-
-BUILTIN_METRIC_COMMANDS: dict[str, str] = {
-    # ── 統合メトリクス（変数選択対応）────────────────────────────────────
-    # cpu_load: {awk_field} は collect_metric 内で interval → $1/$2/$3 に変換
-    "cpu_load":      _load_monitor_cmd("cpu_load"),
-    # mem_used: collect_metric 内で unit_type に応じてコマンドを切り替え
-    "mem_used":      _MEM_USED_COMMANDS["pct"],
-    # ── 個別キー（後方互換のため保持、UI には表示しない）──────────────
-    "cpu_load_1m":   _load_monitor_cmd("cpu_load_1m"),
-    "cpu_load_5m":   _load_monitor_cmd("cpu_load_5m"),
-    "cpu_load_15m":  _load_monitor_cmd("cpu_load_15m"),
-    "mem_used_pct":  _MEM_USED_COMMANDS["pct"],
-    "mem_used_mb":   _MEM_USED_COMMANDS["mb"],
-    # ── その他 ───────────────────────────────────────────────────────────
-    "disk_used_pct": _load_monitor_cmd("disk_used_pct"),
-    "disk_used_gb":  _load_monitor_cmd("disk_used_gb"),
-    "process_count": _load_monitor_cmd("process_count"),
-    "ssl_cert_expiry_days": _load_monitor_cmd("ssl_cert_expiry_days"),
-}
-
 
 async def collect_metric(
     host: str,
@@ -201,24 +170,40 @@ async def collect_metric(
 ) -> tuple[Optional[float], Optional[str]]:
     """Collect a single metric value via SSH. Returns (value, error)."""
     if metric_type == "builtin":
-        if not builtin_key or builtin_key not in BUILTIN_METRIC_COMMANDS:
+        if not builtin_key:
+            return None, "No builtin_key provided"
+
+        # Backward compat: mem_used composite key routes to the correct sub-script
+        if builtin_key == "mem_used":
+            unit_type = (builtin_config or {}).get("unit_type", "pct")
+            actual_key = f"mem_used_{unit_type}" if f"mem_used_{unit_type}" in BUILTIN_METRIC_COMMANDS else "mem_used_pct"
+            template = BUILTIN_METRIC_COMMANDS[actual_key]
+        elif builtin_key not in BUILTIN_METRIC_COMMANDS:
             return None, f"Unknown builtin metric key: {builtin_key}"
+        else:
+            template = BUILTIN_METRIC_COMMANDS[builtin_key]
+
         config = {**(builtin_config or {})}
+
         # command_override が指定されていればそれを使う
         if "command_override" in config:
             command = config["command_override"]
         else:
-            template = BUILTIN_METRIC_COMMANDS[builtin_key]
+            # スクリプトの @config_option に定義された追加パラメータをconfigに注入する
+            # （例: cpu_load の interval=1m → awk_field=$1）
+            entry = BUILTIN_MONITOR_REGISTRY.get(builtin_key, {})
+            for cf in entry.get("config_fields", []):
+                selected_val = config.get(cf["key"], cf.get("default", ""))
+                for opt in cf.get("options", []):
+                    if opt["value"] == selected_val:
+                        for k, v in opt.items():
+                            if k not in ("value", "label") and k not in config:
+                                config[k] = v
+                        break
+
             config.setdefault("path", "/")
             config.setdefault("host", host)
             config.setdefault("port", "443")
-            # cpu_load: interval (1m/5m/15m) → awk フィールド番号に変換
-            if builtin_key == "cpu_load":
-                _field_map = {"1m": "$1", "5m": "$2", "15m": "$3"}
-                config["awk_field"] = _field_map.get(config.get("interval", "1m"), "$1")
-            # mem_used: unit_type (pct/mb) に応じてコマンドを切り替え
-            elif builtin_key == "mem_used":
-                template = _MEM_USED_COMMANDS.get(config.get("unit_type", "pct"), _MEM_USED_COMMANDS["pct"])
             command = _expand_template(template, config)
     else:
         if not custom_script:

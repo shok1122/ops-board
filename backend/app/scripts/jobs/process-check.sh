@@ -1,6 +1,10 @@
 #!/bin/bash
-# プロセス死活確認
-# 確認対象のプロセス名を変更してください（部分一致）
+# @name プロセス死活確認
+# @description 指定したプロセス名が実行中かどうかを確認します
+# @category process
+# @default_cron */5 * * * *
+# @default_timeout 10
+# @tags process,availability
 PROCESS_NAME="nginx"
 
 count=$(pgrep -c "$PROCESS_NAME" 2>/dev/null || echo 0)

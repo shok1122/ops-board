@@ -4,7 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.database import get_db, new_id, now_iso
-from app.models import MonitorCreate, MonitorUpdate, MonitorOut, MonitorDataPoint, BUILTIN_METRIC_KEYS
+from app.models import MonitorCreate, MonitorUpdate, MonitorOut, MonitorDataPoint
+from app.builtin_monitors import BUILTIN_METRIC_COMMANDS, BUILTIN_MONITOR_REGISTRY
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
 
@@ -51,7 +52,7 @@ async def list_monitors(server_id: Optional[str] = Query(default=None)):
 
 @router.post("", response_model=MonitorOut, status_code=201)
 async def create_monitor(body: MonitorCreate):
-    if body.metric_type == "builtin" and body.builtin_key not in BUILTIN_METRIC_KEYS:
+    if body.metric_type == "builtin" and body.builtin_key not in BUILTIN_METRIC_COMMANDS:
         raise HTTPException(status_code=422, detail=f"Unknown builtin_key: {body.builtin_key}")
     if body.metric_type == "custom" and not body.custom_script:
         raise HTTPException(status_code=422, detail="custom_script is required for custom metric_type")
@@ -265,77 +266,15 @@ async def get_monitor_data(
 
 @router.get("/builtin-metrics/list")
 async def list_builtin_metrics():
-    from app.ssh import BUILTIN_METRIC_COMMANDS, _MEM_USED_COMMANDS
-    defaults = {
-        # ── 統合メトリクス（変数選択対応）────────────────────────────────
-        "cpu_load": {
-            "label": "CPU Load",
-            "unit": "",
-            "configurable": True,
-            "config_fields": [
-                {
-                    "key": "interval",
-                    "label": "計測間隔",
-                    "default": "1m",
-                    "type": "select",
-                    "options": [
-                        {"value": "1m",  "label": "1分",  "resolved_command": "awk '{print $1}' /proc/loadavg"},
-                        {"value": "5m",  "label": "5分",  "resolved_command": "awk '{print $2}' /proc/loadavg"},
-                        {"value": "15m", "label": "15分", "resolved_command": "awk '{print $3}' /proc/loadavg"},
-                    ],
-                }
-            ],
-            "command_template": None,  # 動的生成のため非表示
-        },
-        "mem_used": {
-            "label": "Memory Used",
-            "unit": "%",
-            "configurable": True,
-            "config_fields": [
-                {
-                    "key": "unit_type",
-                    "label": "単位",
-                    "default": "pct",
-                    "type": "select",
-                    "options": [
-                        {"value": "pct", "label": "% (使用率)",  "unit": "%",  "resolved_command": _MEM_USED_COMMANDS["pct"]},
-                        {"value": "mb",  "label": "MB (使用量)", "unit": "MB", "resolved_command": _MEM_USED_COMMANDS["mb"]},
-                    ],
-                }
-            ],
-            "command_template": None,  # 動的生成のため非表示
-        },
-        # ── その他 ────────────────────────────────────────────────────────
-        "disk_used_pct": {
-            "label": "Disk Usage",
-            "unit": "%",
-            "configurable": True,
-            "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
-            "command_template": BUILTIN_METRIC_COMMANDS["disk_used_pct"],
-        },
-        "disk_used_gb": {
-            "label": "Disk Used",
-            "unit": "GB",
-            "configurable": True,
-            "config_fields": [{"key": "path", "label": "Mount path", "default": "/"}],
-            "command_template": BUILTIN_METRIC_COMMANDS["disk_used_gb"],
-        },
-        "process_count": {
-            "label": "Process Count",
-            "unit": "",
-            "configurable": False,
-            "command_template": BUILTIN_METRIC_COMMANDS["process_count"],
-        },
-        "ssl_cert_expiry_days": {
-            "label": "SSL Cert Expiry",
-            "unit": "日",
-            "configurable": True,
-            "config_fields": [{"key": "port", "label": "HTTPS port", "default": "443"}],
-            "command_template": BUILTIN_METRIC_COMMANDS["ssl_cert_expiry_days"],
-        },
-    }
     return [
-        {"key": k, **v}
-        for k, v in defaults.items()
-        if k in BUILTIN_METRIC_COMMANDS
+        {
+            "key":              key,
+            "label":            entry["label"],
+            "unit":             entry["unit"],
+            "configurable":     entry["configurable"],
+            "config_fields":    entry["config_fields"],
+            "command_template": entry["command"],
+        }
+        for key, entry in BUILTIN_MONITOR_REGISTRY.items()
+        if not entry.get("hidden", False)
     ]

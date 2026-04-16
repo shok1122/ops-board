@@ -171,23 +171,6 @@ class ServerJobResult(BaseModel):
 
 # ── Monitors ─────────────────────────────────────────────────────────────────
 
-BUILTIN_METRIC_KEYS = [
-    # 統合メトリクス（変数選択対応）
-    "cpu_load",
-    "mem_used",
-    # 後方互換キー
-    "cpu_load_1m",
-    "cpu_load_5m",
-    "cpu_load_15m",
-    "mem_used_pct",
-    "mem_used_mb",
-    # その他
-    "disk_used_pct",
-    "disk_used_gb",
-    "process_count",
-    "ssl_cert_expiry_days",
-]
-
 
 class MonitorCreate(BaseModel):
     name: str

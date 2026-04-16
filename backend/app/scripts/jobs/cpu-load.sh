@@ -1,5 +1,10 @@
 #!/bin/bash
-# CPU ロードアベレージ確認
+# @name CPU負荷確認
+# @description CPU ロードアベレージ（1分・5分・15分）を確認します
+# @category system
+# @default_cron */5 * * * *
+# @default_timeout 10
+# @tags cpu,system
 read load1 load5 load15 _ < /proc/loadavg
 ncpu=$(nproc 2>/dev/null || echo 1)
 

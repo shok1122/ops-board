@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-# OpsBoard Python ジョブサンプル
-# このスクリプトを編集してカスタムチェックを作成してください
-# 出力は JSON 形式にすると結果がリッチ表示されます
+# @name Python スクリプト例
+# @description Python スクリプトのサンプルです。カスタムスクリプト作成の出発点として使用してください
+# @category example
+# @default_cron 0 9 * * *
+# @default_timeout 30
+# @tags example,python
 
 import json
 import subprocess
