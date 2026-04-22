@@ -40,9 +40,6 @@ Registry structure
 ``BUILTIN_METRIC_COMMANDS[key]`` is a convenience alias that contains only
 the raw command strings (mirrors the old hard-coded dict in ``ssh.py``).
 
-The ``mem_used`` virtual key is added for backward compatibility: it is
-hidden from the UI but accepted by ``collect_metric`` (which routes to
-``mem_used_pct`` or ``mem_used_mb`` based on the ``unit_type`` config param).
 """
 
 from __future__ import annotations
@@ -77,16 +74,6 @@ def _load_registry() -> dict[str, dict]:
             "config_fields": config_fields,
         }
         logger.debug("Registered builtin monitor: %s", key)
-
-    # ── Backward-compat virtual key ──────────────────────────────────────────
-    # ``mem_used`` was the old composite key that switches between pct and mb
-    # based on the ``unit_type`` config param.  Keep it hidden so that existing
-    # DB records continue to work without appearing in the UI picker.
-    if "mem_used_pct" in registry and "mem_used" not in registry:
-        registry["mem_used"] = {
-            **registry["mem_used_pct"],
-            "hidden": True,
-        }
 
     return registry
 

@@ -21,11 +21,7 @@ def resolve_command(
     if metric_type == "builtin":
         if not builtin_key:
             return None, "No builtin_key provided"
-        if builtin_key == "mem_used":
-            unit_type = (builtin_config or {}).get("unit_type", "pct")
-            actual_key = f"mem_used_{unit_type}" if f"mem_used_{unit_type}" in BUILTIN_METRIC_COMMANDS else "mem_used_pct"
-            template = BUILTIN_METRIC_COMMANDS[actual_key]
-        elif builtin_key not in BUILTIN_METRIC_COMMANDS:
+        if builtin_key not in BUILTIN_METRIC_COMMANDS:
             return None, f"Unknown builtin metric key: {builtin_key}"
         else:
             template = BUILTIN_METRIC_COMMANDS[builtin_key]
