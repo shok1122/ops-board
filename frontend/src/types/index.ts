@@ -1,4 +1,4 @@
-export type ServerType = 'ssh' | 'no_ssh'
+export type ServerType = 'remote_execution' | 'local_execution'
 
 export interface Server {
   id: string

@@ -14,18 +14,18 @@ import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, Monitor
 import { JobResultCard } from '../components/JobResultView'
 
 const emptyForm: ServerCreate = {
-  name: '', host: '', port: 22, server_type: 'ssh',
+  name: '', host: '', port: 22, server_type: 'remote_execution',
   username: '', auth_type: 'password', password: '', private_key: '', passphrase: '',
 }
 
 const SERVER_TYPE_INFO = {
-  ssh: {
-    label: 'SSH',
-    description: 'SSH経由でジョブ実行・監視',
+  remote_execution: {
+    label: 'リモート実行',
+    description: '指定したサーバに対してSSH経由でジョブ実行や監視を実施',
   },
-  no_ssh: {
-    label: 'SSH不要',
-    description: 'ローカル実行 — $REMOTE_HOST でホスト名を参照',
+  local_execution: {
+    label: 'ローカル実行',
+    description: 'OpsBoardが動作するサーバ上で指定したサーバに対するジョブ実行や監視を実施',
   },
 } as const
 
@@ -296,7 +296,7 @@ export default function Servers() {
           {data?.items.map((s) => {
             const tr = testResults[s.id]
             const ss = statusData[s.id]
-            const isCertOnly = s.server_type === 'no_ssh'
+            const isCertOnly = s.server_type === 'local_execution'
             return (
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 {/* Card header */}
@@ -412,10 +412,10 @@ export default function Servers() {
               {/* サーバータイプ選択 */}
               <Field label="サーバータイプ">
                 <div className="flex gap-3">
-                  {(['ssh', 'no_ssh'] as const).map(t => (
+                  {(['remote_execution', 'local_execution'] as const).map(t => (
                     <label key={t} className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                       form.server_type === t
-                        ? t === 'no_ssh'
+                        ? t === 'local_execution'
                           ? 'border-emerald-500 bg-emerald-50'
                           : 'border-indigo-500 bg-indigo-50'
                         : 'border-gray-200 hover:bg-gray-50'
@@ -428,11 +428,11 @@ export default function Servers() {
                         onChange={() => setForm(f => ({ ...f, server_type: t }))}
                         className="sr-only"
                       />
-                      {t === 'no_ssh'
+                      {t === 'local_execution'
                         ? <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
                         : <Server className="h-4 w-4 text-indigo-500 shrink-0" />}
                       <div>
-                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'no_ssh' ? 'text-emerald-700' : 'text-indigo-700') : 'text-gray-700'}`}>
+                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'local_execution' ? 'text-emerald-700' : 'text-indigo-700') : 'text-gray-700'}`}>
                           {SERVER_TYPE_INFO[t].label}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">
@@ -453,7 +453,7 @@ export default function Servers() {
                   <input required value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
                     className="input" placeholder="192.168.1.1" />
                 </Field>
-                {form.server_type === 'ssh' && (
+                {form.server_type === 'remote_execution' && (
                   <>
                     <Field label="ポート">
                       <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
@@ -467,7 +467,7 @@ export default function Servers() {
                 )}
               </div>
 
-              {form.server_type === 'ssh' && (
+              {form.server_type === 'remote_execution' && (
                 <>
                   <Field label="認証方式">
                     <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}

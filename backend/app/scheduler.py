@@ -78,8 +78,7 @@ async def _execute_job(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "no_ssh":
-            # SSH不要サーバー: ローカルでコマンドを実行し REMOTE_HOST を渡す
+        if job["server_type"] == "local_execution":
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
@@ -191,7 +190,7 @@ async def _trigger_job_manual(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "no_ssh":
+        if job["server_type"] == "local_execution":
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
@@ -370,8 +369,7 @@ async def _collect_monitor(monitor_id: str):
     raw_log = ""
     try:
         config = builtin_config or {}
-        if monitor["server_type"] == "no_ssh":
-            # SSH不要サーバー: コマンドをローカルで実行し REMOTE_HOST を渡す
+        if monitor["server_type"] == "local_execution":
             from app.ssh import run_local_command, format_raw_log, resolve_command
             command, resolve_error = resolve_command(
                 monitor["metric_type"], monitor["builtin_key"],
@@ -452,9 +450,8 @@ async def _auto_check_all_servers():
     from app.ssh import get_system_status
 
     async with get_db() as db:
-        # no_ssh サーバーはSSH接続できないためスキップ
         cur = await db.execute(
-            "SELECT * FROM servers WHERE COALESCE(server_type, 'ssh') = 'ssh'"
+            "SELECT * FROM servers WHERE COALESCE(server_type, 'remote_execution') = 'remote_execution'"
         )
         servers = await cur.fetchall()
 

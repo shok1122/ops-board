@@ -17,7 +17,7 @@ def _row_to_out(row) -> ServerOut:
         name=row["name"],
         host=row["host"],
         port=row["port"],
-        server_type=row["server_type"] if "server_type" in row.keys() else "ssh",
+        server_type=row["server_type"] if "server_type" in row.keys() else "remote_execution",
         username=row["username"] or "",
         auth_type=row["auth_type"],
         created_at=row["created_at"],
@@ -36,8 +36,8 @@ async def list_servers():
 
 @router.post("", response_model=ServerOut, status_code=201)
 async def create_server(body: ServerCreate):
-    if body.server_type == "ssh" and not body.username:
-        raise HTTPException(status_code=422, detail="SSH サーバーにはユーザー名が必要です (no_ssh サーバーは SSH 認証情報不要)")
+    if body.server_type == "remote_execution" and not body.username:
+        raise HTTPException(status_code=422, detail="リモート実行サーバーにはユーザー名が必要です (ローカル実行サーバーは SSH 認証情報不要)")
 
     now = now_iso()
     sid = new_id()
@@ -130,9 +130,9 @@ async def test_server(server_id: str):
     if not row:
         raise HTTPException(404, "Server not found")
 
-    server_type = row["server_type"] if "server_type" in row.keys() else "ssh"
+    server_type = row["server_type"] if "server_type" in row.keys() else "remote_execution"
 
-    if server_type == "no_ssh":
+    if server_type == "local_execution":
         import asyncio
         port = row["port"] or 443
         try:
@@ -166,9 +166,9 @@ async def check_server_status(server_id: str):
     if not row:
         raise HTTPException(404, "Server not found")
 
-    server_type = row["server_type"] if "server_type" in row.keys() else "ssh"
-    if server_type == "no_ssh":
-        raise HTTPException(400, "SSH不要サーバーはシステムステータスチェックに対応していません")
+    server_type = row["server_type"] if "server_type" in row.keys() else "remote_execution"
+    if server_type == "local_execution":
+        raise HTTPException(400, "ローカル実行サーバーはシステムステータスチェックに対応していません")
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None

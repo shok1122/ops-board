@@ -9,7 +9,7 @@ class ServerCreate(BaseModel):
     name: str
     host: str
     port: int = 22
-    server_type: Literal["ssh", "no_ssh"] = "ssh"
+    server_type: Literal["remote_execution", "local_execution"] = "remote_execution"
     username: Optional[str] = None
     auth_type: Literal["password", "key"] = "password"
     password: Optional[str] = None
@@ -21,7 +21,7 @@ class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
     port: Optional[int] = None
-    server_type: Optional[Literal["ssh", "no_ssh"]] = None
+    server_type: Optional[Literal["remote_execution", "local_execution"]] = None
     username: Optional[str] = None
     auth_type: Optional[Literal["password", "key"]] = None
     password: Optional[str] = None
