@@ -80,7 +80,7 @@ function MonitorChart({ monitor }: { monitor: Monitor }) {
             </span>
           ) : latestValue != null ? (
             <span className={`text-lg font-bold tabular-nums ${statusColor}`}>
-              {latestValue.toFixed(1)}<span className="text-xs font-normal ml-0.5">{unit}</span>
+              {latestValue}<span className="text-xs font-normal ml-0.5">{unit}</span>
             </span>
           ) : (
             <span className="text-xs text-gray-400">データなし</span>
