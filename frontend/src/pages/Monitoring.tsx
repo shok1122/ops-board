@@ -37,11 +37,15 @@ function MonitorChart({ monitor }: { monitor: Monitor }) {
     refetchInterval: monitor.interval_minutes * 60 * 1000,
   })
 
-  const chartData = points.map(p => ({
-    time: new Date(p.collected_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
-    value: p.value ?? null,
-    error: p.error,
-  }))
+  const chartData = points.map(p => {
+    const d = new Date(p.collected_at)
+    return {
+      time: d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+      datetime: d.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      value: p.value ?? null,
+      error: p.error,
+    }
+  })
 
   const latest = points.length > 0 ? points[points.length - 1] : null
   const latestValue = latest?.value
@@ -108,6 +112,7 @@ function MonitorChart({ monitor }: { monitor: Monitor }) {
               <Tooltip
                 contentStyle={{ fontSize: 11, padding: '4px 8px' }}
                 formatter={(v: number) => [`${v.toFixed(2)} ${unit}`, monitor.name]}
+                labelFormatter={(_label: string, payload: {payload?: {datetime?: string}}[]) => payload?.[0]?.payload?.datetime ?? _label}
                 labelStyle={{ fontSize: 10 }}
               />
               {warn != null && (
