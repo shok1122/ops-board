@@ -97,7 +97,7 @@ export default function JobDetail() {
               <h1 className="text-xl font-bold text-gray-900">{job.name}</h1>
               {job.description && <p className="text-sm text-gray-500 mt-1">{job.description}</p>}
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-500">
-                <span>サーバー: <strong>{job.server_name}</strong></span>
+                <span>サーバ: <strong>{job.server_name}</strong></span>
                 <span>種別: <strong>{job.type === 'command' ? 'コマンド' : 'ログ取得'}</strong></span>
                 <span className="font-mono">スケジュール: <strong>{job.cron_expr}</strong></span>
               </div>

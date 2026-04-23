@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 
 const nav = [
   { to: '/', label: 'ダッシュボード', icon: LayoutDashboard },
-  { to: '/servers', label: 'サーバー', icon: Server },
+  { to: '/servers', label: 'サーバ', icon: Server },
   { to: '/monitoring', label: 'モニタリング', icon: TrendingUp },
   { to: '/jobs', label: 'ジョブ', icon: Calendar },
   { to: '/executions', label: '実行履歴', icon: History },
@@ -143,12 +143,12 @@ export default function Layout() {
               <h2 className="font-semibold text-gray-900">設定のインポート</h2>
             </div>
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
-              <p>JSON ファイルからサーバーとジョブの設定をインポートします。</p>
+              <p>JSON ファイルからサーバとジョブの設定をインポートします。</p>
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-medium">現在の設定はすべて削除されます</p>
-                  <p className="text-xs">現在登録されているサーバーとジョブをすべて削除し、インポートした設定に置き換えます。この操作は元に戻せません。</p>
+                  <p className="text-xs">現在登録されているサーバとジョブをすべて削除し、インポートした設定に置き換えます。この操作は元に戻せません。</p>
                 </div>
               </div>
             </div>
@@ -181,7 +181,7 @@ export default function Layout() {
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
               <p>以下の設定情報を JSON ファイルとしてダウンロードします。</p>
               <ul className="list-disc list-inside space-y-1 text-gray-600">
-                <li>サーバー接続情報（ホスト・ポート・ユーザー名）</li>
+                <li>サーバ接続情報（ホスト・ポート・ユーザー名）</li>
                 <li>ジョブ設定（スケジュール・コマンド等）</li>
               </ul>
               <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800">

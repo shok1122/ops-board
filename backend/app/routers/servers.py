@@ -37,7 +37,7 @@ async def list_servers():
 @router.post("", response_model=ServerOut, status_code=201)
 async def create_server(body: ServerCreate):
     if body.server_type == "remote_execution" and not body.username:
-        raise HTTPException(status_code=422, detail="リモート実行サーバーにはユーザー名が必要です (ローカル実行サーバーは SSH 認証情報不要)")
+        raise HTTPException(status_code=422, detail="リモート実行サーバにはユーザー名が必要です (ローカル実行サーバは SSH 認証情報不要)")
 
     now = now_iso()
     sid = new_id()
@@ -168,7 +168,7 @@ async def check_server_status(server_id: str):
 
     server_type = row["server_type"] if "server_type" in row.keys() else "remote_execution"
     if server_type == "local_execution":
-        raise HTTPException(400, "ローカル実行サーバーはシステムステータスチェックに対応していません")
+        raise HTTPException(400, "ローカル実行サーバはシステムステータスチェックに対応していません")
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None

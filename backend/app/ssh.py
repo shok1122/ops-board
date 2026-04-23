@@ -244,7 +244,7 @@ async def run_local_command(
     remote_host: str,
     timeout: float = 30.0,
 ) -> SSHResult:
-    """SSH不要サーバー用: コマンドをローカルで実行し、SERVER_HOST 環境変数を渡す。"""
+    """ローカル実行用: コマンドをローカルで実行し、SERVER_HOST 環境変数を渡す。"""
     env = {**os.environ, "SERVER_HOST": remote_host}
     proc = await asyncio.create_subprocess_shell(
         command,

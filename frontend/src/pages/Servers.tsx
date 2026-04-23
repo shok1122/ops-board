@@ -275,12 +275,12 @@ export default function Servers() {
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">サーバー管理</h1>
+        <h1 className="text-2xl font-bold text-gray-900">サーバ管理</h1>
         <button
           onClick={openCreate}
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
-          <Plus className="h-4 w-4" /> サーバー追加
+          <Plus className="h-4 w-4" /> サーバ追加
         </button>
       </div>
 
@@ -290,7 +290,7 @@ export default function Servers() {
         <div className="space-y-4">
           {data?.items.length === 0 && (
             <div className="rounded-xl border border-gray-200 bg-white py-12 text-center text-gray-400">
-              サーバーが登録されていません
+              サーバが登録されていません
             </div>
           )}
           {data?.items.map((s) => {
@@ -403,12 +403,12 @@ export default function Servers() {
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
             <div className="border-b border-gray-100 px-6 py-4">
               <h2 className="font-semibold text-gray-900">
-                {modal.editing ? 'サーバー編集' : 'サーバー追加'}
+                {modal.editing ? 'サーバ編集' : 'サーバ追加'}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* サーバータイプ選択 */}
-              <Field label="サーバータイプ">
+              {/* サーバタイプ選択 */}
+              <Field label="サーバタイプ">
                 <div className="flex gap-3">
                   {(['remote_execution', 'local_execution'] as const).map(t => (
                     <label key={t} className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -445,7 +445,7 @@ export default function Servers() {
               <div className="grid grid-cols-2 gap-4">
                 <Field label="表示名 *">
                   <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className="input" placeholder="本番サーバー" />
+                    className="input" placeholder="本番サーバ" />
                 </Field>
                 <Field label="ホスト *">
                   <input required value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}

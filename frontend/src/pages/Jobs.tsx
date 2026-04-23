@@ -160,7 +160,7 @@ export default function Jobs() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">ジョブ名</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">サーバー</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">サーバ</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">種別</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">スケジュール</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">最終実行</th>
@@ -253,7 +253,7 @@ export default function Jobs() {
                 <input value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   className="input" placeholder="任意の説明" />
               </Field>
-              <Field label="対象サーバー *">
+              <Field label="対象サーバ *">
                 <select required value={form.server_id} onChange={e => setForm(f => ({ ...f, server_id: e.target.value }))}
                   className="input">
                   <option value="">-- 選択してください --</option>

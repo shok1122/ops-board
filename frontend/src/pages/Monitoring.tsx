@@ -418,7 +418,7 @@ function MonitorModal({
 
             {/* Server */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">サーバー *</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">サーバ *</label>
               <select required
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={form.server_id} onChange={e => setField('server_id', e.target.value)}>
@@ -588,7 +588,7 @@ export default function Monitoring() {
 
       {/* Filter */}
       <div className="flex items-center gap-3">
-        <label className="text-sm text-gray-600">サーバー:</label>
+        <label className="text-sm text-gray-600">サーバ:</label>
         <select
           className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           value={selectedServerId}
