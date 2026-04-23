@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle} from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -296,40 +296,40 @@ export default function Servers() {
           {data?.items.map((s) => {
             const tr = testResults[s.id]
             const ss = statusData[s.id]
-            const isCertOnly = s.server_type === 'local_execution'
+            const localExecution = s.server_type === 'local_execution'
             return (
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                  {isCertOnly
-                    ? <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
+                  {localExecution
+                    ? <Server className="h-5 w-5 text-emerald-400 shrink-0" />
                     : <Server className="h-5 w-5 text-indigo-400 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">{s.name}</span>
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${localExecution ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
                           {SERVER_TYPE_INFO[s.server_type as keyof typeof SERVER_TYPE_INFO]?.label ?? s.server_type}
                         </span>
                     </div>
                     <div className="text-xs text-gray-400">
                       {s.host}:{s.port}
-                      {!isCertOnly && <> · {s.username} ·{' '}
-                        <span className="rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
+                      {!localExecution && <> · {s.username} ·{' '}
+                        <span className="text-[10px] rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
                       </>}
                     </div>
                   </div>
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {isCertOnly ? (
+                    {localExecution ? (
                       <button
                         onClick={() => handleTest(s.id)}
                         disabled={tr?.testing}
                         className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
                       >
                         {tr?.testing ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : tr?.ok ? <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                          : tr?.ok ? <Server className="h-3 w-3 text-emerald-500" />
                           : tr && !tr.ok ? <WifiOff className="h-3 w-3 text-red-500" />
-                          : <ShieldCheck className="h-3 w-3 text-gray-400" />}
+                          : <Server className="h-3 w-3 text-gray-400" />}
                         {tr?.testing ? '確認中…'
                           : tr?.ok ? `残り ${tr.cert_expiry_days}日`
                           : tr?.error ? 'エラー'
@@ -375,7 +375,7 @@ export default function Servers() {
 
                 {/* Status body — always visible */}
                 <div className="px-5 py-4 bg-gray-50/50">
-                  {!isCertOnly && (
+                  {!localExecution && (
                     <>
                       {ss?.loading && !ss?.data ? (
                         <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -427,7 +427,7 @@ export default function Servers() {
                         className="sr-only"
                       />
                       {t === 'local_execution'
-                        ? <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+                        ? <Server className="h-4 w-4 text-emerald-500 shrink-0" />
                         : <Server className="h-4 w-4 text-indigo-500 shrink-0" />}
                       <div>
                         <div className={`text-xs font-medium ${form.server_type === t ? (t === 'local_execution' ? 'text-emerald-700' : 'text-indigo-700') : 'text-gray-700'}`}>
