@@ -98,9 +98,10 @@ async def _execute_job(job_id: str):
             password = decrypt(job["password_enc"]) if job["password_enc"] else None
             private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
             passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
+            command = f"export SERVER_HOST={job['host']!r}; " + (job["command"] or "echo 'No command set'")
             result = await run_command(
                 job["host"], job["port"], job["username"],
-                job["command"] or "echo 'No command set'",
+                command,
                 password=password, private_key=private_key, passphrase=passphrase,
                 timeout=timeout,
             )
@@ -210,9 +211,10 @@ async def _trigger_job_manual(job_id: str):
             password = decrypt(job["password_enc"]) if job["password_enc"] else None
             private_key = decrypt(job["private_key_enc"]) if job["private_key_enc"] else None
             passphrase = decrypt(job["passphrase_enc"]) if job["passphrase_enc"] else None
+            command = f"export SERVER_HOST={job['host']!r}; " + (job["command"] or "echo 'No command set'")
             result = await run_command(
                 job["host"], job["port"], job["username"],
-                job["command"] or "echo 'No command set'",
+                command,
                 password=password, private_key=private_key, passphrase=passphrase,
                 timeout=timeout,
             )
