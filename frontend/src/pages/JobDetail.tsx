@@ -79,6 +79,9 @@ export default function JobDetail() {
     },
   })
 
+  const latestFinishedAt = executions?.items[0]?.finished_at
+  const latestTime = latestFinishedAt ? format(new Date(latestFinishedAt), 'MM/dd HH:mm:ss') : null
+
   return (
     <div className="p-8">
       <Link to="/jobs" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-6">
@@ -96,11 +99,20 @@ export default function JobDetail() {
                 <span>種別: <strong>{job.type === 'command' ? 'コマンド' : 'ログ取得'}</strong></span>
                 <span className="font-mono">スケジュール: <strong>{job.cron_expr}</strong></span>
                 {job.last_status && (
-                  <span>最終状態: <StatusBadge status={job.last_status} size="sm" /></span>
+                  <span>最新の実行記録: {latestTime && `${latestTime} `}<StatusBadge status={job.last_status} size="sm" /></span>
                 )}
               </div>
+              {(() => {
+                const latest = executions?.items.find(e => e.parsed_result)
+                if (!latest?.parsed_result) return null
+                return (
+                  <div className="mt-3 rounded-lg border border-gray-200 overflow-hidden">
+                    <JsonResultTable data={latest.parsed_result as Record<string, unknown>} />
+                  </div>
+                )
+              })()}
               {(job.command || job.log_path) && (
-                <p className="mt-2 font-mono text-xs bg-gray-50 rounded px-3 py-2 text-gray-600">
+                <p className="mt-2 font-mono text-xs bg-gray-50 rounded px-3 py-2 text-gray-600 whitespace-pre-wrap">
                   {job.command || job.log_path}
                 </p>
               )}
@@ -118,22 +130,6 @@ export default function JobDetail() {
           </div>
         </div>
       )}
-
-      {(() => {
-        const latest = executions?.items.find(e => e.parsed_result)
-        if (!latest?.parsed_result) return null
-        return (
-          <div className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-base font-semibold text-gray-900">最新の実行結果</h2>
-              <span className="text-xs text-gray-400 ml-auto">
-                {latest.finished_at ? format(new Date(latest.finished_at), 'MM/dd HH:mm:ss') : ''}
-              </span>
-            </div>
-            <JsonResultTable data={latest.parsed_result as Record<string, unknown>} />
-          </div>
-        )
-      })()}
 
       <h2 className="text-lg font-semibold text-gray-900 mb-4">実行履歴</h2>
 
