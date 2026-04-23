@@ -285,7 +285,7 @@ export default function Servers() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-amber-500" /></div>
       ) : (
         <div className="space-y-4">
           {data?.items.length === 0 && (
@@ -302,12 +302,12 @@ export default function Servers() {
                 {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
                   {localExecution
-                    ? <Server className="h-5 w-5 text-emerald-400 shrink-0" />
-                    : <Server className="h-5 w-5 text-orange-400 shrink-0" />}
+                    ? <Server className="h-5 w-5 text-sky-400 shrink-0" />
+                    : <Server className="h-5 w-5 text-amber-400 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">{s.name}</span>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${localExecution ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${localExecution ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {SERVER_TYPE_INFO[s.server_type as keyof typeof SERVER_TYPE_INFO]?.label ?? s.server_type}
                         </span>
                     </div>
@@ -399,8 +399,8 @@ export default function Servers() {
                     <label key={t} className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                       form.server_type === t
                         ? t === 'local_execution'
-                          ? 'border-emerald-500 bg-emerald-50'
-                          : 'border-orange-500 bg-orange-50'
+                          ? 'border-sky-500 bg-sky-50'
+                          : 'border-amber-500 bg-amber-50'
                         : 'border-gray-200 hover:bg-gray-50'
                     }`}>
                       <input
@@ -412,10 +412,10 @@ export default function Servers() {
                         className="sr-only"
                       />
                       {t === 'local_execution'
-                        ? <Server className="h-4 w-4 text-emerald-500 shrink-0" />
-                        : <Server className="h-4 w-4 text-orange-500 shrink-0" />}
+                        ? <Server className="h-4 w-4 text-sky-500 shrink-0" />
+                        : <Server className="h-4 w-4 text-amber-500 shrink-0" />}
                       <div>
-                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'local_execution' ? 'text-emerald-700' : 'text-orange-700') : 'text-gray-700'}`}>
+                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'local_execution' ? 'text-sky-700' : 'text-amber-700') : 'text-gray-700'}`}>
                           {SERVER_TYPE_INFO[t].label}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">
