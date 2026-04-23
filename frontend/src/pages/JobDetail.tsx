@@ -79,8 +79,10 @@ export default function JobDetail() {
     },
   })
 
-  const latestFinishedAt = executions?.items[0]?.finished_at
-  const latestTime = latestFinishedAt ? format(new Date(latestFinishedAt), 'MM/dd HH:mm:ss') : null
+  const latestExec = executions?.items[0] ?? null
+  const latestDuration = latestExec?.finished_at
+    ? Math.round((new Date(latestExec.finished_at).getTime() - new Date(latestExec.started_at).getTime()) / 1000)
+    : null
 
   return (
     <div className="p-8">
@@ -98,24 +100,8 @@ export default function JobDetail() {
                 <span>サーバー: <strong>{job.server_name}</strong></span>
                 <span>種別: <strong>{job.type === 'command' ? 'コマンド' : 'ログ取得'}</strong></span>
                 <span className="font-mono">スケジュール: <strong>{job.cron_expr}</strong></span>
-                {job.last_status && (
-                  <span>最新の実行記録: {latestTime && `${latestTime} `}<StatusBadge status={job.last_status} size="sm" /></span>
-                )}
               </div>
-              {(() => {
-                const latest = executions?.items.find(e => e.parsed_result)
-                if (!latest?.parsed_result) return null
-                return (
-                  <div className="mt-3 rounded-lg border border-gray-200 overflow-hidden">
-                    <JsonResultTable data={latest.parsed_result as Record<string, unknown>} />
-                  </div>
-                )
-              })()}
-              {(job.command || job.log_path) && (
-                <p className="mt-2 font-mono text-xs bg-gray-50 rounded px-3 py-2 text-gray-600 whitespace-pre-wrap">
-                  {job.command || job.log_path}
-                </p>
-              )}
+
             </div>
             <button
               onClick={() => triggerMut.mutate()}
@@ -128,6 +114,41 @@ export default function JobDetail() {
               今すぐ実行
             </button>
           </div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2">実行結果</h2>
+          {latestExec && (
+            <div className="grid grid-cols-5 gap-3 mb-3">
+              {[
+                { label: '開始時刻', value: format(new Date(latestExec.started_at), 'MM/dd HH:mm:ss') },
+                { label: '終了時刻', value: latestExec.finished_at ? format(new Date(latestExec.finished_at), 'MM/dd HH:mm:ss') : '—' },
+                { label: '所要時間', value: latestDuration != null ? `${latestDuration}秒` : '—' },
+                { label: 'トリガー', value: latestExec.triggered_by === 'manual' ? '手動' : 'スケジュール' },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                  <p className="text-xs text-gray-400 mb-1">{label}</p>
+                  <p className="text-sm font-medium text-gray-700 font-mono">{value}</p>
+                </div>
+              ))}
+              <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                <p className="text-xs text-gray-400 mb-1">状態</p>
+                <StatusBadge status={latestExec.status} size="sm" />
+              </div>
+            </div>
+          )}
+          {(() => {
+            const latest = executions?.items.find(e => e.parsed_result)
+            if (!latest?.parsed_result) return null
+            return (
+              <div className="mt-3 rounded-lg border border-gray-200 overflow-hidden">
+                <JsonResultTable data={latest.parsed_result as Record<string, unknown>} />
+              </div>
+            )
+          })()}
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-2">実行コマンド</h2>
+          {(job.command || job.log_path) && (
+            <p className="mt-2 font-mono text-xs bg-gray-50 rounded px-3 py-2 text-gray-600 whitespace-pre-wrap">
+              {job.command || job.log_path}
+            </p>
+          )}
         </div>
       )}
 
@@ -145,19 +166,17 @@ export default function JobDetail() {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">所要時間</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">状態</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">トリガー</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">結果</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {executions?.items.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">実行履歴はありません</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">実行履歴はありません</td></tr>
               )}
               {executions?.items.map((e) => {
                 const duration = e.finished_at
                   ? Math.round((new Date(e.finished_at).getTime() - new Date(e.started_at).getTime()) / 1000)
                   : null
-                const r = e.parsed_result
                 return (
                   <tr key={e.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
@@ -172,11 +191,6 @@ export default function JobDetail() {
                     <td className="px-4 py-3"><StatusBadge status={e.status} size="sm" /></td>
                     <td className="px-4 py-3 text-xs text-gray-400">
                       {e.triggered_by === 'manual' ? '手動' : 'スケジュール'}
-                    </td>
-                    <td className="px-4 py-2 align-top">
-                      {r
-                        ? <JsonResultTable data={r as Record<string, unknown>} />
-                        : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <Link
