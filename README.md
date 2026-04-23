@@ -14,13 +14,24 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Feature | Description |
 |---------|-------------|
 | Password Authentication | Protect Web UI access with a password. Includes IP-based lockout after repeated failures |
-| Server Management | Register, edit, and delete SSH targets. Supports both password and private key auth. Includes connection test |
+| Server Management | Register, edit, and delete server targets. Two types: **remote_execution** (SSH to remote hosts) and **local_execution** (runs commands on the backend host itself). Supports password and private key auth for remote servers. Includes connection test |
 | Job Management | Set schedules with cron expressions. Two types: **command execution** and **log file retrieval** |
 | Manual Execution | Trigger any job immediately with one click |
 | Execution History | List all execution results. Filterable by status |
 | Log Viewer | NDJSON format shown as a structured table. Plain text displayed as-is |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
 | Config Export / Import | Portable server and job configuration via JSON files |
+
+## Docker Images
+
+Pre-built images are published to GitHub Container Registry on every push to `main` and on version tags.
+
+```
+ghcr.io/shok1122/ops-board-backend
+ghcr.io/shok1122/ops-board-frontend
+```
+
+Tags: `main`, `sha-<commit>`, `<semver>` (e.g. `1.2`, `1.2.3`)
 
 ## Getting Started
 

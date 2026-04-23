@@ -131,7 +131,7 @@ Manual execution (`POST /jobs/{id}/trigger`) runs in the background via `asyncio
 
 ### `ssh.py`
 
-A thin asyncssh wrapper for SSH utilities.
+A thin asyncssh wrapper for SSH utilities. Only used for `remote_execution` servers.
 
 | Function | Description |
 |----------|-------------|
@@ -140,7 +140,8 @@ A thin asyncssh wrapper for SSH utilities.
 | `test_connection()` | Runs `echo ok` to test connectivity and measure latency |
 
 Supports both password and private key authentication.  
-Host key verification is skipped (assumes internal network use).
+Host key verification is skipped (assumes internal network use).  
+`local_execution` servers bypass SSH entirely — commands run directly via `asyncio.create_subprocess_shell` on the backend host.
 
 ### `crypto.py`
 
@@ -163,7 +164,7 @@ Pydantic model definitions for API requests and responses.
 
 | Model | Purpose |
 |-------|---------|
-| `ServerCreate` / `ServerUpdate` | Server registration and update requests |
+| `ServerCreate` / `ServerUpdate` | Server registration and update requests. `server_type` is `"remote_execution"` (SSH) or `"local_execution"` (backend host) |
 | `ServerOut` | Server info response (credentials excluded) |
 | `JobCreate` / `JobUpdate` | Job registration and update requests |
 | `JobOut` | Job info response (server name joined) |

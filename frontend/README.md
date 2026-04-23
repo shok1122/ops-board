@@ -154,6 +154,7 @@ TypeScript types that mirror the backend Pydantic models.
 
 | Type | Backend Model | Description |
 |------|--------------|-------------|
+| `ServerType` | — | `'remote_execution'` \| `'local_execution'` |
 | `Server` | `ServerOut` | Server info (credentials excluded) |
 | `ServerCreate` | `ServerCreate` | Server creation request |
 | `Job` | `JobOut` | Job info |
