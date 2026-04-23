@@ -1,6 +1,7 @@
 #!/bin/bash
 # @name HTTP ヘルスチェック
 # @description 対象サーバ（SERVER_HOST）に HTTP リクエストを送り、ステータスコードを確認します
+# @run_locally
 # @category network
 # @default_cron */5 * * * *
 # @default_timeout 30
@@ -10,8 +11,7 @@
 # @config_option scheme https HTTPS
 # @config_field key=path label="パス" type=text default=
 # 対象サーバは SERVER_HOST 環境変数から自動取得します（未設定時は localhost）
-TARGET_HOST="${SERVER_HOST:-localhost}"
-URL="{scheme}://$TARGET_HOST/{path}"
+URL="{scheme}://$SERVER_HOST/{path}"
 TIMEOUT=10
 
 http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" "$URL" 2>/dev/null)

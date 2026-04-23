@@ -7,6 +7,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.database import get_db, new_id, now_iso
+def _command_run_locally(command: str | None) -> bool:
+    """Return True if the script embedded in the command has a @run_locally directive."""
+    return bool(command and "# @run_locally" in command)
+
+
 def _parse_job_output(stdout: str) -> dict | None:
     """出力の最後の非空行を JSON としてパースする。
     有効な JSON オブジェクトであれば dict を返し、そうでなければ None を返す。"""
@@ -78,7 +83,7 @@ async def _execute_job(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "local_execution":
+        if job["server_type"] == "local_execution" or _command_run_locally(job["command"]):
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
@@ -191,7 +196,7 @@ async def _trigger_job_manual(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "local_execution":
+        if job["server_type"] == "local_execution" or _command_run_locally(job["command"]):
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
