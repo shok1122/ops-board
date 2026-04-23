@@ -3,8 +3,54 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Play, Loader2, ChevronRight } from 'lucide-react'
 import { getJob, getExecutions, triggerJob } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
-import { formatDistanceToNow, format } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import { format } from 'date-fns'
+
+function renderValue(val: unknown): React.ReactNode {
+  if (val === null || val === undefined) return <span className="text-gray-300">—</span>
+  if (typeof val === 'boolean') return String(val)
+  if (typeof val !== 'object') return String(val)
+  if (Array.isArray(val)) {
+    if (val.length === 0) return <span className="text-gray-300">[]</span>
+    if (val.every(v => typeof v !== 'object' || v === null)) return val.join(', ')
+    const keys = Array.from(new Set(val.flatMap(item => Object.keys(item as object))))
+    return (
+      <table className="text-xs border border-gray-200 rounded">
+        <thead className="bg-gray-50">
+          <tr>{keys.map(k => <th key={k} className="px-2 py-1 text-left font-medium text-gray-500 border-b border-gray-200">{k}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {(val as Record<string, unknown>[]).map((item, i) => (
+            <tr key={i}>
+              {keys.map(k => <td key={k} className="px-2 py-1 text-gray-700">{renderValue(item[k])}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+  return <span className="font-mono text-xs">{JSON.stringify(val)}</span>
+}
+
+function JsonResultTable({ data }: { data: Record<string, unknown> }) {
+  return (
+    <table className="w-full text-sm border-collapse">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 border-b border-gray-200 w-32">項目</th>
+          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 border-b border-gray-200">内容</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {Object.entries(data).map(([key, val]) => (
+          <tr key={key}>
+            <td className="px-4 py-2 font-mono text-xs text-gray-500 align-top whitespace-nowrap">{key}</td>
+            <td className="px-4 py-2 text-sm text-gray-800 align-top">{renderValue(val)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
 
 export default function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -73,6 +119,22 @@ export default function JobDetail() {
         </div>
       )}
 
+      {(() => {
+        const latest = executions?.items.find(e => e.parsed_result)
+        if (!latest?.parsed_result) return null
+        return (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50">
+              <h2 className="text-base font-semibold text-gray-900">最新の実行結果</h2>
+              <span className="text-xs text-gray-400 ml-auto">
+                {latest.finished_at ? format(new Date(latest.finished_at), 'MM/dd HH:mm:ss') : ''}
+              </span>
+            </div>
+            <JsonResultTable data={latest.parsed_result as Record<string, unknown>} />
+          </div>
+        )
+      })()}
+
       <h2 className="text-lg font-semibold text-gray-900 mb-4">実行履歴</h2>
 
       {isLoading ? (
@@ -87,17 +149,19 @@ export default function JobDetail() {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">所要時間</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">状態</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">トリガー</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">結果</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {executions?.items.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">実行履歴はありません</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">実行履歴はありません</td></tr>
               )}
               {executions?.items.map((e) => {
                 const duration = e.finished_at
                   ? Math.round((new Date(e.finished_at).getTime() - new Date(e.started_at).getTime()) / 1000)
                   : null
+                const r = e.parsed_result
                 return (
                   <tr key={e.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
@@ -112,6 +176,11 @@ export default function JobDetail() {
                     <td className="px-4 py-3"><StatusBadge status={e.status} size="sm" /></td>
                     <td className="px-4 py-3 text-xs text-gray-400">
                       {e.triggered_by === 'manual' ? '手動' : 'スケジュール'}
+                    </td>
+                    <td className="px-4 py-2 align-top">
+                      {r
+                        ? <JsonResultTable data={r as Record<string, unknown>} />
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <Link

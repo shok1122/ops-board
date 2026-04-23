@@ -7,6 +7,12 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 
 
 def _row_to_summary(row) -> ExecutionSummary:
+    parsed = None
+    if row["parsed_result"]:
+        try:
+            parsed = json.loads(row["parsed_result"])
+        except Exception:
+            pass
     return ExecutionSummary(
         id=row["id"],
         job_id=row["job_id"],
@@ -16,6 +22,7 @@ def _row_to_summary(row) -> ExecutionSummary:
         finished_at=row["finished_at"],
         status=row["status"],
         exit_code=row["exit_code"],
+        parsed_result=parsed,
         created_at=row["created_at"],
     )
 

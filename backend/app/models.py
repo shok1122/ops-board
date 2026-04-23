@@ -138,6 +138,7 @@ class ExecutionSummary(BaseModel):
     finished_at: Optional[str]
     status: str
     exit_code: Optional[int]
+    parsed_result: Optional[dict[str, Any]] = None
     created_at: str
 
 

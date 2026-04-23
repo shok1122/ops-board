@@ -86,6 +86,7 @@ export interface ExecutionSummary {
   finished_at?: string
   status: ExecutionStatus
   exit_code?: number
+  parsed_result?: JobResultOutput
   created_at: string
 }
 
