@@ -333,6 +333,33 @@ function MonitorModal({
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-5 space-y-4 text-sm max-h-[75vh] overflow-y-auto">
 
+            {/* Name */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">名前 *</label>
+              <input required
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.name} onChange={e => setField('name', e.target.value)} />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
+              <input
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.description ?? ''} onChange={e => setField('description', e.target.value)} />
+            </div>
+
+            {/* Server */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">サーバ *</label>
+              <select required
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.server_id} onChange={e => setField('server_id', e.target.value)}>
+                <option value="">選択してください</option>
+                {servers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+
             {/* Script selector */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">スクリプト *</label>
@@ -402,65 +429,29 @@ function MonitorModal({
                   )}
                 </div>
               )}
-
-              {/* Custom script editor */}
-              {form.metric_type === 'custom' && (
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    スクリプト内容
-                    <span className="ml-1 font-normal text-gray-400">(標準出力に数値1つを出力)</span>
-                  </label>
-                  <textarea
-                    required
-                    rows={5}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder={"#!/bin/bash\nps -o rss= -p $(pgrep nginx | head -1) | awk '{printf \"%.1f\", $1/1024}'"}
-                    value={form.custom_script ?? ''}
-                    onChange={e => {
-                      const content = e.target.value
-                      setField('custom_script', content)
-                      setField('execution_type', content.includes('# @run_locally') ? 'local' : 'remote')
-                    }}
-                  />
-                </div>
-              )}
             </div>
 
-            {/* Name */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">名前 *</label>
-              <input required
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.name} onChange={e => setField('name', e.target.value)} />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
-              <input
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.description ?? ''} onChange={e => setField('description', e.target.value)} />
-            </div>
-
-            {/* Server */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">サーバ *</label>
-              <select required
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.server_id} onChange={e => setField('server_id', e.target.value)}>
-                <option value="">選択してください</option>
-                {servers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-
-            {/* Unit */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">単位</label>
-              <input
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder={selectedBuiltin?.unit ?? '例: %, MB, GB'}
-                value={form.unit ?? ''} onChange={e => setField('unit', e.target.value)} />
-            </div>
+            {/* Custom script editor */}
+            {form.metric_type === 'custom' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  スクリプト内容
+                  <span className="ml-1 font-normal text-gray-400">(標準出力に数値1つを出力)</span>
+                </label>
+                <textarea
+                  required
+                  rows={5}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder={"#!/bin/bash\nps -o rss= -p $(pgrep nginx | head -1) | awk '{printf \"%.1f\", $1/1024}'"}
+                  value={form.custom_script ?? ''}
+                  onChange={e => {
+                    const content = e.target.value
+                    setField('custom_script', content)
+                    setField('execution_type', content.includes('# @run_locally') ? 'local' : 'remote')
+                  }}
+                />
+              </div>
+            )}
 
             {/* Interval */}
             <div>
@@ -479,6 +470,15 @@ function MonitorModal({
                 </select>
                 <span className="self-center text-xs text-gray-400">= {form.interval_minutes}分</span>
               </div>
+            </div>
+
+            {/* Unit */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">単位</label>
+              <input
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder={selectedBuiltin?.unit ?? '例: %, MB, GB'}
+                value={form.unit ?? ''} onChange={e => setField('unit', e.target.value)} />
             </div>
 
             {/* Thresholds */}
