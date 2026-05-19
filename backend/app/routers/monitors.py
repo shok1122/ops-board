@@ -27,6 +27,7 @@ def _row_to_out(row) -> MonitorOut:
         unit=row["unit"],
         warning_threshold=row["warning_threshold"],
         critical_threshold=row["critical_threshold"],
+        execution_type=row["execution_type"] if "execution_type" in row.keys() else "remote",
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -65,13 +66,14 @@ async def create_monitor(body: MonitorCreate):
         await db.execute(
             "INSERT INTO monitors (id, name, description, server_id, interval_minutes, enabled, "
             "metric_type, builtin_key, builtin_config, custom_script, unit, "
-            "warning_threshold, critical_threshold, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "warning_threshold, critical_threshold, execution_type, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 mid, body.name, body.description, body.server_id,
                 body.interval_minutes, int(body.enabled),
                 body.metric_type, body.builtin_key, config_json, body.custom_script,
                 body.unit, body.warning_threshold, body.critical_threshold,
+                body.execution_type,
                 now, now,
             ),
         )
@@ -137,6 +139,8 @@ async def update_monitor(monitor_id: str, body: MonitorUpdate):
         fields["warning_threshold"] = body.warning_threshold
     if body.critical_threshold is not None:
         fields["critical_threshold"] = body.critical_threshold
+    if body.execution_type is not None:
+        fields["execution_type"] = body.execution_type
 
     if not fields:
         raise HTTPException(status_code=422, detail="No fields to update")
@@ -291,6 +295,7 @@ async def list_builtin_metrics():
             "configurable":     entry["configurable"],
             "config_fields":    entry["config_fields"],
             "command_template": entry["command"],
+            "execution_type":   entry.get("execution_type", "remote"),
         }
         for key, entry in BUILTIN_MONITOR_REGISTRY.items()
         if not entry.get("hidden", False)

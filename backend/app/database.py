@@ -146,6 +146,32 @@ async def init_db():
             await db.execute("ALTER TABLE monitors ADD COLUMN last_log_at TEXT")
             await db.commit()
 
+        # マイグレーション: jobs に execution_type カラム追加
+        cur = await db.execute("PRAGMA table_info(jobs)")
+        job_cols = [row[1] for row in await cur.fetchall()]
+        if "execution_type" not in job_cols:
+            await db.execute(
+                "ALTER TABLE jobs ADD COLUMN execution_type TEXT NOT NULL DEFAULT 'remote'"
+            )
+            await db.execute(
+                "UPDATE jobs SET execution_type = 'local' "
+                "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
+            )
+            await db.commit()
+
+        # マイグレーション: monitors に execution_type カラム追加
+        cur = await db.execute("PRAGMA table_info(monitors)")
+        monitor_cols2 = [row[1] for row in await cur.fetchall()]
+        if "execution_type" not in monitor_cols2:
+            await db.execute(
+                "ALTER TABLE monitors ADD COLUMN execution_type TEXT NOT NULL DEFAULT 'remote'"
+            )
+            await db.execute(
+                "UPDATE monitors SET execution_type = 'local' "
+                "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
+            )
+            await db.commit()
+
 
 @asynccontextmanager
 async def get_db():

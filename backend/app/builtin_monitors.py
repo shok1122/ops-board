@@ -72,6 +72,7 @@ def _load_registry() -> dict[str, dict]:
             "configurable": meta.get("configurable", "false").lower() == "true",
             "hidden": meta.get("hidden", "false").lower() == "true",
             "config_fields": config_fields,
+            "execution_type": meta.get("execution_type", "remote"),
         }
         logger.debug("Registered builtin monitor: %s", key)
 

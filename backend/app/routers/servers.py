@@ -12,13 +12,14 @@ router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 def _row_to_out(row) -> ServerOut:
+    username = row["username"] or None
     return ServerOut(
         id=row["id"],
         name=row["name"],
         host=row["host"],
         port=row["port"],
-        server_type=row["server_type"] if "server_type" in row.keys() else "remote_execution",
-        username=row["username"] or "",
+        has_ssh=bool(username),
+        username=username,
         auth_type=row["auth_type"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -36,9 +37,6 @@ async def list_servers():
 
 @router.post("", response_model=ServerOut, status_code=201)
 async def create_server(body: ServerCreate):
-    if body.server_type == "remote_execution" and not body.username:
-        raise HTTPException(status_code=422, detail="リモート実行サーバにはユーザー名が必要です (ローカル実行サーバは SSH 認証情報不要)")
-
     now = now_iso()
     sid = new_id()
     username = body.username or ""
@@ -52,7 +50,7 @@ async def create_server(body: ServerCreate):
                 encrypt(body.password) if body.password else None,
                 encrypt(body.private_key) if body.private_key else None,
                 encrypt(body.passphrase) if body.passphrase else None,
-                body.server_type,
+                "remote_execution" if username else "local_execution",
                 now, now,
             ),
         )
@@ -87,18 +85,24 @@ async def update_server(server_id: str, body: ServerUpdate):
             updates["host"] = body.host
         if body.port is not None:
             updates["port"] = body.port
-        if body.server_type is not None:
-            updates["server_type"] = body.server_type
-        if body.username is not None:
-            updates["username"] = body.username
-        if body.auth_type is not None:
-            updates["auth_type"] = body.auth_type
-        if body.password is not None:
-            updates["password_enc"] = encrypt(body.password)
-        if body.private_key is not None:
-            updates["private_key_enc"] = encrypt(body.private_key)
-        if body.passphrase is not None:
-            updates["passphrase_enc"] = encrypt(body.passphrase)
+        if body.clear_ssh:
+            updates["username"] = ""
+            updates["password_enc"] = None
+            updates["private_key_enc"] = None
+            updates["passphrase_enc"] = None
+            updates["server_type"] = "local_execution"
+        else:
+            if body.username is not None:
+                updates["username"] = body.username
+                updates["server_type"] = "remote_execution" if body.username else "local_execution"
+            if body.auth_type is not None:
+                updates["auth_type"] = body.auth_type
+            if body.password is not None:
+                updates["password_enc"] = encrypt(body.password)
+            if body.private_key is not None:
+                updates["private_key_enc"] = encrypt(body.private_key)
+            if body.passphrase is not None:
+                updates["passphrase_enc"] = encrypt(body.passphrase)
         updates["updated_at"] = now_iso()
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -130,22 +134,8 @@ async def test_server(server_id: str):
     if not row:
         raise HTTPException(404, "Server not found")
 
-    server_type = row["server_type"] if "server_type" in row.keys() else "remote_execution"
-
-    if server_type == "local_execution":
-        import asyncio
-        port = row["port"] or 443
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(row["host"], port), timeout=10.0
-            )
-            writer.close()
-            await writer.wait_closed()
-            return TestResult(ok=True)
-        except asyncio.TimeoutError:
-            return TestResult(ok=False, error=f"接続タイムアウト (10秒)")
-        except Exception as e:
-            return TestResult(ok=False, error=str(e))
+    if not (row["username"] or "").strip():
+        return TestResult(ok=False, error="SSH接続情報が未設定です")
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None
@@ -166,9 +156,8 @@ async def check_server_status(server_id: str):
     if not row:
         raise HTTPException(404, "Server not found")
 
-    server_type = row["server_type"] if "server_type" in row.keys() else "remote_execution"
-    if server_type == "local_execution":
-        raise HTTPException(400, "ローカル実行サーバはシステムステータスチェックに対応していません")
+    if not (row["username"] or "").strip():
+        raise HTTPException(400, "SSH接続情報が未設定のサーバはシステムステータスチェックに対応していません")
 
     password = decrypt(row["password_enc"]) if row["password_enc"] else None
     private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None

@@ -13,6 +13,12 @@ const emptyForm: JobCreate = {
   name: '', description: '', server_id: '',
   type: 'command', command: '', log_path: '',
   cron_expr: '0 * * * *', enabled: true, timeout_sec: 30,
+  execution_type: 'remote',
+}
+
+function deriveExecutionType(type: 'command' | 'log_fetch', command?: string): 'remote' | 'local' {
+  if (type === 'log_fetch') return 'remote'
+  return (command ?? '').includes('# @run_locally') ? 'local' : 'remote'
 }
 
 /** {key} プレースホルダーをコンフィグ値で置換する（{{}} はリテラルブレース） */
@@ -77,6 +83,7 @@ export default function Jobs() {
       name: j.name, description: j.description ?? '', server_id: j.server_id,
       type: j.type, command: j.command ?? '', log_path: j.log_path ?? '',
       cron_expr: j.cron_expr, enabled: j.enabled, timeout_sec: j.timeout_sec,
+      execution_type: deriveExecutionType(j.type, j.command ?? ''),
     })
     setTemplateConfigFields([])
     setTemplateConfig({})
@@ -101,12 +108,13 @@ export default function Jobs() {
         command: resolvedCommand,
         cron_expr: s.defaultCron ?? f.cron_expr,
         timeout_sec: s.defaultTimeout ?? f.timeout_sec,
+        execution_type: deriveExecutionType('command', resolvedCommand),
       }))
     } else {
       setTemplateConfigFields([])
       setTemplateConfig({})
       setTemplateBaseScript('')
-      setForm(f => ({ ...f, command: s.content }))
+      setForm(f => ({ ...f, command: s.content, execution_type: deriveExecutionType('command', s.content) }))
     }
   }
 
@@ -115,7 +123,7 @@ export default function Jobs() {
     setTemplateConfig(newConfig)
     const defaults = Object.fromEntries(templateConfigFields.map(f => [f.key, f.default]))
     const resolvedCommand = resolveTemplateScript(templateBaseScript, newConfig, defaults)
-    setForm(f => ({ ...f, command: resolvedCommand }))
+    setForm(f => ({ ...f, command: resolvedCommand, execution_type: deriveExecutionType('command', resolvedCommand) }))
   }
 
   const handleTrigger = async (id: string) => {
@@ -265,7 +273,7 @@ export default function Jobs() {
                   {(['command', 'log_fetch'] as const).map(t => (
                     <label key={t} className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" name="type" value={t} checked={form.type === t}
-                        onChange={() => setForm(f => ({ ...f, type: t }))} />
+                        onChange={() => setForm(f => ({ ...f, type: t, execution_type: deriveExecutionType(t, f.command ?? '') }))} />
                       <span className="text-sm">{t === 'command' ? 'コマンド実行' : 'ログ取得'}</span>
                     </label>
                   ))}
@@ -315,15 +323,39 @@ export default function Jobs() {
                     required
                     rows={4}
                     value={form.command ?? ''}
-                    onChange={e => setForm((f: JobCreate) => ({ ...f, command: e.target.value }))}
+                    onChange={e => {
+                      const cmd = e.target.value
+                      setForm((f: JobCreate) => ({ ...f, command: cmd, execution_type: deriveExecutionType('command', cmd) }))
+                    }}
                     className="input font-mono text-xs resize-y"
                     placeholder="/opt/scripts/backup.sh"
                   />
+                  {form.command && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-xs text-gray-500">実行方式:</span>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                        form.execution_type === 'local'
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {form.execution_type === 'local' ? 'ローカル実行' : 'リモート実行 (SSH)'}
+                      </span>
+                      {form.execution_type === 'remote' && (
+                        <span className="text-[10px] text-gray-400"># @run_locally を追加するとローカル実行になります</span>
+                      )}
+                    </div>
+                  )}
                 </Field>
               ) : (
                 <Field label="JSONファイルパス *">
                   <input required value={form.log_path ?? ''} onChange={e => setForm(f => ({ ...f, log_path: e.target.value }))}
                     className="input font-mono text-sm" placeholder="/var/lib/myapp/status.json" />
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="text-xs text-gray-500">実行方式:</span>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                      リモート実行 (SSH)
+                    </span>
+                  </div>
                 </Field>
               )}
               <Field label="スケジュール (cron 5フィールド)">
@@ -352,9 +384,20 @@ export default function Jobs() {
               </label>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>
-                <button type="submit" disabled={createMut.isPending || updateMut.isPending} className="btn-primary">
-                  {(createMut.isPending || updateMut.isPending) ? '保存中…' : '保存'}
-                </button>
+                {(() => {
+                  const selectedServer = servers?.items.find((s: Server) => s.id === form.server_id)
+                  const remoteDisabled = form.execution_type === 'remote' && !selectedServer?.has_ssh
+                  return (
+                    <>
+                      {remoteDisabled && (
+                        <span className="self-center text-xs text-red-500">リモート実行にはSSH接続情報が必要です</span>
+                      )}
+                      <button type="submit" disabled={createMut.isPending || updateMut.isPending || remoteDisabled} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                        {(createMut.isPending || updateMut.isPending) ? '保存中…' : '保存'}
+                      </button>
+                    </>
+                  )
+                })()}
               </div>
             </form>
           </div>

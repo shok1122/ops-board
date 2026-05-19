@@ -4,7 +4,7 @@ import { Search, X, BookOpen, Lock } from 'lucide-react'
 import { getScripts, getBuiltinMetrics, getJobTemplates } from '../api/client'
 import type {
   Script, BuiltinMetricDef, JobTemplate,
-  UnifiedScript, ScriptLanguage, JobTemplateConfigField,
+  UnifiedScript, ScriptLanguage, JobTemplateConfigField, ExecutionType,
 } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -21,6 +21,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   system: 'システム', network: 'ネットワーク', process: 'プロセス', log: 'ログ', example: 'サンプル',
 }
 
+const EXEC_BADGE: Record<ExecutionType, { label: string; cls: string }> = {
+  local:  { label: 'ローカル実行', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  remote: { label: 'リモート実行', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+}
+
+function contentExecutionType(content: string): ExecutionType {
+  return content.includes('# @run_locally') ? 'local' : 'remote'
+}
+
 function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
   return {
     id: `builtin:${b.key}`,
@@ -31,6 +40,7 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     tags: ['ビルトイン', 'メトリクス'],
     source: 'builtin_metric',
     readonly: true,
+    execution_type: b.execution_type ?? 'remote',
     builtinKey: b.key,
     unit: b.unit,
     configFields: b.config_fields,
@@ -47,6 +57,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     tags: [t.category, ...t.tags],
     source: 'job_template',
     readonly: true,
+    execution_type: contentExecutionType(t.script),
     category: t.category,
     defaultCron: t.default_cron,
     defaultTimeout: t.default_timeout,
@@ -59,6 +70,7 @@ function userToUnified(s: Script): UnifiedScript {
     id: s.id, name: s.name, description: s.description,
     language: s.language, content: s.content, tags: s.tags,
     source: 'user', readonly: false,
+    execution_type: contentExecutionType(s.content),
   }
 }
 
@@ -212,6 +224,7 @@ export function ScriptPickerModal({
                   <ul className="divide-y divide-gray-50">
                     {g.items.map(s => {
                       const badge = SOURCE_BADGE[s.source]
+                      const execBadge = EXEC_BADGE[s.execution_type]
                       return (
                         <li key={s.id}>
                           <button
@@ -225,6 +238,9 @@ export function ScriptPickerModal({
                               </span>
                               <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${badge.cls}`}>
                                 {badge.label}
+                              </span>
+                              <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${execBadge.cls}`}>
+                                {execBadge.label}
                               </span>
                               {s.readonly && <Lock className="h-2.5 w-2.5 text-gray-400" />}
                               <span className="text-sm font-medium text-gray-800 truncate">{s.name}</span>
@@ -249,9 +265,19 @@ export function ScriptPickerModal({
                 <div className="px-4 py-3 border-b border-gray-100 shrink-0 space-y-1">
                   <p className="text-sm font-medium text-gray-800">{selected.name}</p>
                   {selected.description && <p className="text-xs text-gray-400">{selected.description}</p>}
-                  {selected.unit && (
-                    <p className="text-xs text-gray-500">単位: <span className="font-medium">{selected.unit}</span></p>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const eb = EXEC_BADGE[selected.execution_type]
+                      return (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${eb.cls}`}>
+                          {eb.label}
+                        </span>
+                      )
+                    })()}
+                    {selected.unit && (
+                      <span className="text-xs text-gray-500">単位: <span className="font-medium">{selected.unit}</span></span>
+                    )}
+                  </div>
                   {selected.configFields && selected.configFields.length > 0 && (
                     <p className="text-xs text-indigo-600">
                       設定可能: {selected.configFields.map(f => f.label).join(', ')}

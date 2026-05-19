@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle} from 'lucide-react'
+import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle, ShieldCheck} from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -13,21 +13,11 @@ import {
 import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, MonitorDataPoint } from '../types'
 import { JobResultCard } from '../components/JobResultView'
 
-const emptyForm: ServerCreate = {
-  name: '', host: '', port: 22, server_type: 'remote_execution',
+const emptyForm: ServerCreate & { enable_ssh: boolean } = {
+  name: '', host: '', port: 22,
   username: '', auth_type: 'password', password: '', private_key: '', passphrase: '',
+  enable_ssh: false,
 }
-
-const SERVER_TYPE_INFO = {
-  remote_execution: {
-    label: 'リモート実行',
-    description: '指定したサーバに対してSSH経由でジョブ実行や監視を実施',
-  },
-  local_execution: {
-    label: 'ローカル実行',
-    description: 'OpsBoardが動作するサーバ上で指定したサーバに対するジョブ実行や監視を実施',
-  },
-} as const
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -195,11 +185,13 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
   )
 }
 
+type FormState = ServerCreate & { enable_ssh: boolean }
+
 export default function Servers() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
-  const [form, setForm] = useState<ServerCreate>(emptyForm)
+  const [form, setForm] = useState<FormState>(emptyForm)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms?: number; cert_expiry_days?: number; error?: string; testing: boolean }>>({})
   const [statusData, setStatusData] = useState<Record<string, { loading: boolean; data?: ServerStatus }>>({})
   const { data: latestStatuses } = useQuery({
@@ -231,12 +223,14 @@ export default function Servers() {
     mutationFn: deleteServer,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['servers'] }),
   })
+
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
     setForm({
       name: s.name, host: s.host, port: s.port,
-      server_type: s.server_type ?? 'ssh',
-      username: s.username, auth_type: s.auth_type,
+      username: s.username ?? '', auth_type: s.auth_type,
+      password: '', private_key: '', passphrase: '',
+      enable_ssh: s.has_ssh,
     })
     setModal({ open: true, editing: s })
   }
@@ -257,7 +251,6 @@ export default function Servers() {
     try {
       const res = await checkServerStatus(id)
       setStatusData(s => ({ ...s, [id]: { loading: false, data: res } }))
-
     } catch {
       setStatusData(s => ({ ...s, [id]: { loading: false, data: { id: '', server_id: id, checked_at: '', error: '取得失敗' } } }))
     }
@@ -265,10 +258,15 @@ export default function Servers() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const { enable_ssh, ...rest } = form
+    const payload: ServerCreate = enable_ssh
+      ? rest
+      : { name: rest.name, host: rest.host, port: rest.port, auth_type: rest.auth_type, clear_ssh: modal.editing ? true : undefined }
+
     if (modal.editing) {
-      updateMut.mutate({ id: modal.editing.id, data: form })
+      updateMut.mutate({ id: modal.editing.id, data: payload })
     } else {
-      createMut.mutate(form)
+      createMut.mutate(payload)
     }
   }
 
@@ -296,31 +294,31 @@ export default function Servers() {
           {data?.items.map((s) => {
             const tr = testResults[s.id]
             const ss = statusData[s.id]
-            const localExecution = s.server_type === 'local_execution'
             return (
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                  {localExecution
-                    ? <Server className="h-5 w-5 text-sky-400 shrink-0" />
-                    : <Server className="h-5 w-5 text-amber-400 shrink-0" />}
+                  <Server className="h-5 w-5 text-amber-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">{s.name}</span>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${localExecution ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                          {SERVER_TYPE_INFO[s.server_type as keyof typeof SERVER_TYPE_INFO]?.label ?? s.server_type}
+                      {s.has_ssh && (
+                        <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <ShieldCheck className="h-3 w-3" />
+                          リモート実行可能
                         </span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-400">
                       {s.host}:{s.port}
-                      {!localExecution && <> · {s.username} ·{' '}
+                      {s.has_ssh && s.username && <> · {s.username} ·{' '}
                         <span className="text-[10px] rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
                       </>}
                     </div>
                   </div>
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {!localExecution && (
+                    {s.has_ssh && (
                       <>
                         <button
                           onClick={() => handleTest(s.id)}
@@ -358,9 +356,9 @@ export default function Servers() {
                   </div>
                 </div>
 
-                {/* Status body — always visible */}
+                {/* Status body */}
                 <div className="px-5 py-4 bg-gray-50/50">
-                  {!localExecution && (
+                  {s.has_ssh && (
                     <>
                       {ss?.loading && !ss?.data ? (
                         <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -392,41 +390,6 @@ export default function Servers() {
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* サーバタイプ選択 */}
-              <Field label="サーバタイプ">
-                <div className="flex gap-3">
-                  {(['remote_execution', 'local_execution'] as const).map(t => (
-                    <label key={t} className={`flex-1 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      form.server_type === t
-                        ? t === 'local_execution'
-                          ? 'border-sky-500 bg-sky-50'
-                          : 'border-amber-500 bg-amber-50'
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="server_type"
-                        value={t}
-                        checked={form.server_type === t}
-                        onChange={() => setForm(f => ({ ...f, server_type: t }))}
-                        className="sr-only"
-                      />
-                      {t === 'local_execution'
-                        ? <Server className="h-4 w-4 text-sky-500 shrink-0" />
-                        : <Server className="h-4 w-4 text-amber-500 shrink-0" />}
-                      <div>
-                        <div className={`text-xs font-medium ${form.server_type === t ? (t === 'local_execution' ? 'text-sky-700' : 'text-amber-700') : 'text-gray-700'}`}>
-                          {SERVER_TYPE_INFO[t].label}
-                        </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">
-                          {SERVER_TYPE_INFO[t].description}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-
               <div className="grid grid-cols-2 gap-4">
                 <Field label="表示名 *">
                   <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -436,48 +399,65 @@ export default function Servers() {
                   <input required value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
                     className="input" placeholder="192.168.1.1" />
                 </Field>
-                {form.server_type === 'remote_execution' && (
-                  <>
-                    <Field label="ポート">
-                      <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
-                        className="input" />
-                    </Field>
-                    <Field label="ユーザー名 *">
-                      <input required value={form.username ?? ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                        className="input" placeholder="ubuntu" />
-                    </Field>
-                  </>
-                )}
               </div>
 
-              {form.server_type === 'remote_execution' && (
-                <>
-                  <Field label="認証方式">
-                    <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}
-                      className="input">
-                      <option value="password">パスワード</option>
-                      <option value="key">秘密鍵</option>
-                    </select>
-                  </Field>
-                  {form.auth_type === 'password' ? (
-                    <Field label="パスワード">
-                      <input type="password" value={form.password ?? ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                        className="input" placeholder="••••••••" />
-                    </Field>
-                  ) : (
-                    <>
-                      <Field label="秘密鍵 (PEM形式)">
-                        <textarea rows={5} value={form.private_key ?? ''} onChange={e => setForm(f => ({ ...f, private_key: e.target.value }))}
-                          className="input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
-                      </Field>
-                      <Field label="パスフレーズ (任意)">
-                        <input type="password" value={form.passphrase ?? ''} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))}
+              {/* SSH設定トグル */}
+              <div className={`rounded-lg border p-4 transition-colors ${form.enable_ssh ? 'border-emerald-200 bg-emerald-50/50' : 'border-gray-200'}`}>
+                <label className="flex items-center gap-3 cursor-pointer mb-3">
+                  <input
+                    type="checkbox"
+                    checked={form.enable_ssh}
+                    onChange={e => setForm(f => ({ ...f, enable_ssh: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                      SSH接続情報を設定する
+                    </span>
+                    <p className="text-xs text-gray-400 mt-0.5">設定するとリモート実行が有効になります</p>
+                  </div>
+                </label>
+
+                {form.enable_ssh && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="ポート">
+                        <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
                           className="input" />
                       </Field>
-                    </>
-                  )}
-                </>
-              )}
+                      <Field label="ユーザー名 *">
+                        <input required={form.enable_ssh} value={form.username ?? ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                          className="input" placeholder="ubuntu" />
+                      </Field>
+                    </div>
+                    <Field label="認証方式">
+                      <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}
+                        className="input">
+                        <option value="password">パスワード</option>
+                        <option value="key">秘密鍵</option>
+                      </select>
+                    </Field>
+                    {form.auth_type === 'password' ? (
+                      <Field label="パスワード">
+                        <input type="password" value={form.password ?? ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                          className="input" placeholder="••••••••" />
+                      </Field>
+                    ) : (
+                      <>
+                        <Field label="秘密鍵 (PEM形式)">
+                          <textarea rows={5} value={form.private_key ?? ''} onChange={e => setForm(f => ({ ...f, private_key: e.target.value }))}
+                            className="input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                        </Field>
+                        <Field label="パスフレーズ (任意)">
+                          <input type="password" value={form.passphrase ?? ''} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))}
+                            className="input" />
+                        </Field>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>

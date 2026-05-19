@@ -1,6 +1,7 @@
 #!/bin/bash
 # @label SSL Cert Expiry
 # @unit %
+# @execution_type local
 # @configurable true
 # @config_field key=port label="HTTPS port" default=443
 

@@ -229,6 +229,7 @@ const EMPTY_FORM: MonitorCreate = {
   unit: '',
   warning_threshold: undefined,
   critical_threshold: undefined,
+  execution_type: 'local',
 }
 
 /** 編集時にビルトインの表示名を引く */
@@ -285,6 +286,7 @@ function MonitorModal({
         builtin_config: {},
         custom_script: '',
         unit: f.unit || s.unit || '',
+        execution_type: s.execution_type,
       }))
     } else {
       setForm(f => ({
@@ -293,6 +295,7 @@ function MonitorModal({
         builtin_key: undefined,
         builtin_config: {},
         custom_script: s.content,
+        execution_type: s.execution_type,
       }))
     }
   }
@@ -381,6 +384,25 @@ function MonitorModal({
                 </div>
               ))}
 
+              {/* Execution type badge (read-only, derived from script) */}
+              {hasScript && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">実行方式:</span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                    form.execution_type === 'local'
+                      ? 'bg-sky-50 text-sky-700 border-sky-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {form.execution_type === 'local' ? 'ローカル実行' : 'リモート実行 (SSH)'}
+                  </span>
+                  {form.execution_type === 'remote' && (
+                    <span className="text-[10px] text-gray-400">
+                      {form.metric_type === 'custom' ? '# @run_locally を追加するとローカル実行になります' : 'スクリプトの仕様'}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Custom script editor */}
               {form.metric_type === 'custom' && (
                 <div className="mt-2">
@@ -394,7 +416,11 @@ function MonitorModal({
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder={"#!/bin/bash\nps -o rss= -p $(pgrep nginx | head -1) | awk '{printf \"%.1f\", $1/1024}'"}
                     value={form.custom_script ?? ''}
-                    onChange={e => setField('custom_script', e.target.value)}
+                    onChange={e => {
+                      const content = e.target.value
+                      setField('custom_script', content)
+                      setField('execution_type', content.includes('# @run_locally') ? 'local' : 'remote')
+                    }}
                   />
                 </div>
               )}
@@ -480,15 +506,26 @@ function MonitorModal({
             </label>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-            <button type="button" onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-              キャンセル
-            </button>
-            <button type="submit" disabled={saving}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
-              {saving ? '保存中...' : '保存'}
-            </button>
+          <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4 flex-wrap">
+            {(() => {
+              const selectedServer = servers.find(s => s.id === form.server_id)
+              const remoteDisabled = form.execution_type === 'remote' && !selectedServer?.has_ssh
+              return (
+                <>
+                  {remoteDisabled && (
+                    <span className="self-center text-xs text-red-500 mr-auto">選択したスクリプトはリモート実行(SSH)が必要ですが、このサーバにSSH接続情報がありません</span>
+                  )}
+                  <button type="button" onClick={onClose}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                    キャンセル
+                  </button>
+                  <button type="submit" disabled={saving || remoteDisabled}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                    {saving ? '保存中...' : '保存'}
+                  </button>
+                </>
+              )
+            })()}
           </div>
         </form>
       </div>

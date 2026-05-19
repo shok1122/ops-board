@@ -21,6 +21,10 @@ const PLACEHOLDERS: Record<ScriptLanguage, string> = {
 }
 const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '', tags: [] }
 
+function contentExecutionType(content: string): 'remote' | 'local' {
+  return content.includes('# @run_locally') ? 'local' : 'remote'
+}
+
 /** ビルトインメトリクスを UnifiedScript に変換 */
 function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
   return {
@@ -32,6 +36,7 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     tags: ['ビルトイン', 'メトリクス'],
     source: 'builtin_metric',
     readonly: true,
+    execution_type: b.execution_type ?? 'remote',
     builtinKey: b.key,
     unit: b.unit,
     configFields: b.config_fields,
@@ -49,6 +54,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     tags: [t.category, ...t.tags],
     source: 'job_template',
     readonly: true,
+    execution_type: contentExecutionType(t.script),
     category: t.category,
     defaultCron: t.default_cron,
     defaultTimeout: t.default_timeout,
@@ -66,6 +72,7 @@ function userToUnified(s: Script): UnifiedScript {
     tags: s.tags,
     source: 'user',
     readonly: false,
+    execution_type: contentExecutionType(s.content),
   }
 }
 

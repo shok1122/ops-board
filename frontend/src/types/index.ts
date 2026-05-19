@@ -1,12 +1,10 @@
-export type ServerType = 'remote_execution' | 'local_execution'
-
 export interface Server {
   id: string
   name: string
   host: string
   port: number
-  server_type: ServerType
-  username: string
+  has_ssh: boolean
+  username?: string
   auth_type: 'password' | 'key'
   created_at: string
   updated_at: string
@@ -16,12 +14,12 @@ export interface ServerCreate {
   name: string
   host: string
   port: number
-  server_type: ServerType
   username?: string
   auth_type: 'password' | 'key'
   password?: string
   private_key?: string
   passphrase?: string
+  clear_ssh?: boolean
 }
 
 export interface TestResult {
@@ -45,6 +43,8 @@ export interface ServerStatus {
   error?: string
 }
 
+export type ExecutionType = 'remote' | 'local'
+
 export interface Job {
   id: string
   name: string
@@ -57,6 +57,7 @@ export interface Job {
   cron_expr: string
   enabled: boolean
   timeout_sec: number
+  execution_type: ExecutionType
   last_run_at?: string
   last_status?: string
   created_at: string
@@ -73,6 +74,7 @@ export interface JobCreate {
   cron_expr: string
   enabled: boolean
   timeout_sec: number
+  execution_type: ExecutionType
 }
 
 export type ExecutionStatus = 'running' | 'success' | 'failure' | 'timeout'
@@ -202,6 +204,7 @@ export interface BuiltinMetricDef {
   configurable: boolean
   config_fields?: BuiltinMetricConfigField[]
   command_template?: string | null
+  execution_type?: ExecutionType
 }
 
 export interface MonitorCreate {
@@ -217,6 +220,7 @@ export interface MonitorCreate {
   unit?: string
   warning_threshold?: number
   critical_threshold?: number
+  execution_type: ExecutionType
 }
 
 export interface Monitor extends MonitorCreate {
@@ -288,6 +292,7 @@ export interface UnifiedScript {
   tags: string[]
   source: ScriptSource
   readonly: boolean        // true = 編集・削除不可
+  execution_type: ExecutionType
   // builtin_metric 専用
   builtinKey?: BuiltinMetricKey
   unit?: string

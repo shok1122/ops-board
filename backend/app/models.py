@@ -9,7 +9,6 @@ class ServerCreate(BaseModel):
     name: str
     host: str
     port: int = 22
-    server_type: Literal["remote_execution", "local_execution"] = "remote_execution"
     username: Optional[str] = None
     auth_type: Literal["password", "key"] = "password"
     password: Optional[str] = None
@@ -21,12 +20,12 @@ class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
     port: Optional[int] = None
-    server_type: Optional[Literal["remote_execution", "local_execution"]] = None
     username: Optional[str] = None
     auth_type: Optional[Literal["password", "key"]] = None
     password: Optional[str] = None
     private_key: Optional[str] = None
     passphrase: Optional[str] = None
+    clear_ssh: Optional[bool] = None
 
 
 class ServerOut(BaseModel):
@@ -34,8 +33,8 @@ class ServerOut(BaseModel):
     name: str
     host: str
     port: int
-    server_type: str
-    username: str
+    has_ssh: bool
+    username: Optional[str]
     auth_type: str
     created_at: str
     updated_at: str
@@ -80,6 +79,7 @@ class JobCreate(BaseModel):
     cron_expr: str
     enabled: bool = True
     timeout_sec: int = Field(default=30, ge=1, le=3600)
+    execution_type: Literal["remote", "local"] = "local"
 
 
 class JobUpdate(BaseModel):
@@ -92,6 +92,7 @@ class JobUpdate(BaseModel):
     cron_expr: Optional[str] = None
     enabled: Optional[bool] = None
     timeout_sec: Optional[int] = None
+    execution_type: Optional[Literal["remote", "local"]] = None
 
 
 class JobOut(BaseModel):
@@ -106,6 +107,7 @@ class JobOut(BaseModel):
     cron_expr: str
     enabled: bool
     timeout_sec: int
+    execution_type: str
     last_run_at: Optional[str]
     last_status: Optional[str]
     created_at: str
@@ -186,6 +188,7 @@ class MonitorCreate(BaseModel):
     unit: Optional[str] = None
     warning_threshold: Optional[float] = None
     critical_threshold: Optional[float] = None
+    execution_type: Literal["remote", "local"] = "local"
 
 
 class MonitorUpdate(BaseModel):
@@ -201,6 +204,7 @@ class MonitorUpdate(BaseModel):
     unit: Optional[str] = None
     warning_threshold: Optional[float] = None
     critical_threshold: Optional[float] = None
+    execution_type: Optional[Literal["remote", "local"]] = None
 
 
 class MonitorOut(BaseModel):
@@ -218,6 +222,7 @@ class MonitorOut(BaseModel):
     unit: Optional[str]
     warning_threshold: Optional[float]
     critical_threshold: Optional[float]
+    execution_type: str
     created_at: str
     updated_at: str
 

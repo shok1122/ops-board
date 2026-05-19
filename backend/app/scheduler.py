@@ -55,7 +55,6 @@ async def _execute_job(job_id: str):
     async with get_db() as db:
         row = await db.execute(
             "SELECT j.*, s.host, s.port, s.username, s.auth_type, "
-            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM jobs j JOIN servers s ON j.server_id = s.id WHERE j.id = ?",
             (job_id,),
@@ -83,7 +82,8 @@ async def _execute_job(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "local_execution" or _command_run_locally(job["command"]):
+        exec_type = job["execution_type"] if "execution_type" in job.keys() else "remote"
+        if exec_type == "local" or _command_run_locally(job["command"]):
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
@@ -169,7 +169,6 @@ async def _trigger_job_manual(job_id: str):
     async with get_db() as db:
         row = await db.execute(
             "SELECT j.*, s.host, s.port, s.username, s.auth_type, "
-            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM jobs j JOIN servers s ON j.server_id = s.id WHERE j.id = ?",
             (job_id,),
@@ -196,7 +195,8 @@ async def _trigger_job_manual(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
-        if job["server_type"] == "local_execution" or _command_run_locally(job["command"]):
+        exec_type = job["execution_type"] if "execution_type" in job.keys() else "remote"
+        if exec_type == "local" or _command_run_locally(job["command"]):
             result = await run_local_command(
                 job["command"] or "echo 'No command set'",
                 remote_host=job["host"],
@@ -360,7 +360,6 @@ async def _collect_monitor(monitor_id: str):
     async with get_db() as db:
         cur = await db.execute(
             "SELECT m.*, s.host, s.port, s.username, s.auth_type, "
-            "COALESCE(s.server_type, 'ssh') AS server_type, "
             "s.password_enc, s.private_key_enc, s.passphrase_enc "
             "FROM monitors m JOIN servers s ON m.server_id = s.id WHERE m.id = ?",
             (monitor_id,),
@@ -376,7 +375,8 @@ async def _collect_monitor(monitor_id: str):
     raw_log = ""
     try:
         config = builtin_config or {}
-        if monitor["server_type"] == "local_execution":
+        exec_type = monitor["execution_type"] if "execution_type" in monitor.keys() else "remote"
+        if exec_type == "local":
             from app.ssh import run_local_command, format_raw_log, resolve_command
             command, resolve_error = resolve_command(
                 monitor["metric_type"], monitor["builtin_key"],
@@ -458,7 +458,7 @@ async def _auto_check_all_servers():
 
     async with get_db() as db:
         cur = await db.execute(
-            "SELECT * FROM servers WHERE COALESCE(server_type, 'remote_execution') = 'remote_execution'"
+            "SELECT * FROM servers WHERE username IS NOT NULL AND username != ''"
         )
         servers = await cur.fetchall()
 
