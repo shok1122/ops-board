@@ -53,6 +53,7 @@ export default function Jobs() {
   const [templateConfigFields, setTemplateConfigFields] = useState<JobTemplateConfigField[]>([])
   const [templateConfig, setTemplateConfig] = useState<Record<string, string>>({})
   const [templateBaseScript, setTemplateBaseScript] = useState<string>('')
+  const [selectedScriptName, setSelectedScriptName] = useState<string | null>(null)
 
   const createMut = useMutation({
     mutationFn: createJob,
@@ -90,9 +91,10 @@ export default function Jobs() {
     setTemplateBaseScript('')
     setModal({ open: true, editing: j })
   }
-  const closeModal = () => { setModal({ open: false }) }
+  const closeModal = () => { setModal({ open: false }); setSelectedScriptName(null) }
 
   const handleScriptSelect = (s: UnifiedScript) => {
+    setSelectedScriptName(s.name)
     if (s.source === 'job_template') {
       const fields = s.templateConfigFields ?? []
       const defaults = Object.fromEntries(fields.map(f => [f.key, f.default]))
@@ -102,8 +104,6 @@ export default function Jobs() {
       setTemplateBaseScript(s.content)
       setForm(f => ({
         ...f,
-        name: f.name || s.name,
-        description: f.description || s.description || '',
         type: 'command',
         command: resolvedCommand,
         cron_expr: s.defaultCron ?? f.cron_expr,
@@ -281,7 +281,15 @@ export default function Jobs() {
               </Field>
               {form.type === 'command' ? (
                 <Field label="コマンド *">
-                  <div className="flex justify-end mb-1.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    {selectedScriptName ? (
+                      <span className="flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-1 truncate max-w-[60%]">
+                        <span className="shrink-0 text-indigo-400">📄</span>
+                        {selectedScriptName}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
                     <ScriptPickerButton
                       context="job"
                       onSelect={handleScriptSelect}
