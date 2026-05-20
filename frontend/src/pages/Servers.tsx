@@ -298,7 +298,7 @@ export default function Servers() {
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                  <Server className="h-5 w-5 text-amber-400 shrink-0" />
+                  <Server className="h-5 w-5 text-indigo-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">{s.name}</span>
