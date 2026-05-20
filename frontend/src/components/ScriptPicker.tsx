@@ -4,19 +4,11 @@ import { Search, X, BookOpen, Lock } from 'lucide-react'
 import { getScripts, getBuiltinMetrics, getJobTemplates } from '../api/client'
 import type {
   Script, BuiltinMetricDef, JobTemplate,
-  UnifiedScript, ScriptLanguage, JobTemplateConfigField, ExecutionType,
+  UnifiedScript, JobTemplateConfigField, ExecutionType,
 } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const LANG_COLORS: Record<ScriptLanguage, string> = {
-  bash:   'bg-green-100 text-green-700 border-green-200',
-  python: 'bg-blue-100 text-blue-700 border-blue-200',
-  ruby:   'bg-red-100 text-red-700 border-red-200',
-}
-const LANG_LABELS: Record<ScriptLanguage, string> = {
-  bash: 'Bash', python: 'Python', ruby: 'Ruby',
-}
 const CATEGORY_LABELS: Record<string, string> = {
   system: 'システム', network: 'ネットワーク', process: 'プロセス', log: 'ログ', example: 'サンプル',
 }
@@ -51,7 +43,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     id: `template:${t.id}`,
     name: t.name,
     description: t.description,
-    language: t.language as ScriptLanguage,
+    language: 'bash',
     content: t.script,
     source: 'job_template',
     readonly: true,
@@ -100,7 +92,6 @@ export function ScriptPickerModal({
   onClose: () => void
 }) {
   const [search, setSearch] = useState('')
-  const [filterLang, setFilterLang] = useState<ScriptLanguage | ''>('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const { data: userScripts = [] } = useQuery<Script[]>({
@@ -128,12 +119,10 @@ export function ScriptPickerModal({
   ]
 
   const filtered = all.filter(s => {
-    const matchLang = !filterLang || s.language === filterLang
     const q = search.toLowerCase()
-    const matchSearch = !q
+    return !q
       || s.name.toLowerCase().includes(q)
       || (s.description ?? '').toLowerCase().includes(q)
-    return matchLang && matchSearch
   })
 
   const selected = selectedId ? all.find(s => s.id === selectedId) : null
@@ -187,20 +176,6 @@ export function ScriptPickerModal({
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
-            {(['', 'bash', 'python', 'ruby'] as const).map(lang => (
-              <button type="button" key={lang} onClick={() => setFilterLang(lang)}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                  filterLang === lang
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : lang
-                      ? `${LANG_COLORS[lang]} hover:opacity-80`
-                      : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                }`}>
-                {lang ? LANG_LABELS[lang] : 'すべて'}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* List + Preview */}
@@ -230,9 +205,6 @@ export function ScriptPickerModal({
                             onClick={() => setSelectedId(s.id)}
                           >
                             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                              <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${LANG_COLORS[s.language as ScriptLanguage]}`}>
-                                {LANG_LABELS[s.language as ScriptLanguage] ?? s.language}
-                              </span>
                               <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${badge.cls}`}>
                                 {badge.label}
                               </span>

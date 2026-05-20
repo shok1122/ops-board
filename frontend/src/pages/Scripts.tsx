@@ -2,23 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Copy, Check, Code2, Lock, ChevronDown, ChevronRight } from 'lucide-react'
 import { getScripts, createScript, updateScript, deleteScript, getBuiltinMetrics, getJobTemplates } from '../api/client'
-import type { Script, ScriptCreate, ScriptLanguage, UnifiedScript, BuiltinMetricDef, JobTemplate } from '../types'
+import type { Script, ScriptCreate, UnifiedScript, BuiltinMetricDef, JobTemplate } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const LANG_COLORS: Record<ScriptLanguage, string> = {
-  bash:   'bg-green-100 text-green-700 border-green-200',
-  python: 'bg-blue-100 text-blue-700 border-blue-200',
-  ruby:   'bg-red-100 text-red-700 border-red-200',
-}
-const LANG_LABELS: Record<ScriptLanguage, string> = {
-  bash: 'Bash', python: 'Python', ruby: 'Ruby',
-}
-const PLACEHOLDERS: Record<ScriptLanguage, string> = {
-  bash: '#!/bin/bash\n# スクリプトの内容を入力してください\necho "Hello"',
-  python: '#!/usr/bin/env python3\n# スクリプトの内容を入力してください\nprint("Hello")',
-  ruby: '#!/usr/bin/env ruby\n# スクリプトの内容を入力してください\nputs "Hello"',
-}
+const PLACEHOLDER = '#!/bin/bash\n# スクリプトの内容を入力してください\necho "Hello"'
 const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '' }
 
 function contentExecutionType(content: string): 'remote' | 'local' {
@@ -48,7 +36,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     id: `template:${t.id}`,
     name: t.name,
     description: t.description,
-    language: t.language as ScriptLanguage,
+    language: 'bash',
     content: t.script,
     source: 'job_template',
     readonly: true,
@@ -100,7 +88,6 @@ function ScriptCard({
   onDelete?: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const lang = LANG_LABELS[script.language as ScriptLanguage] ?? script.language
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -112,9 +99,6 @@ function ScriptCard({
           {expanded
             ? <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />
             : <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
-          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border ${LANG_COLORS[script.language as ScriptLanguage] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-            {lang}
-          </span>
           <div className="min-w-0 flex-1">
             <span className="font-medium text-gray-900 text-sm">{script.name}</span>
             {script.description && (
@@ -208,22 +192,10 @@ function ScriptModal({
                 value={form.description ?? ''} onChange={e => setField('description', e.target.value)} placeholder="スクリプトの用途" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">言語</label>
-              <div className="flex gap-3">
-                {(['bash', 'python', 'ruby'] as ScriptLanguage[]).map(lang => (
-                  <label key={lang} className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" name="language" value={lang} checked={form.language === lang}
-                      onChange={() => setField('language', lang)} />
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded border ${LANG_COLORS[lang]}`}>{LANG_LABELS[lang]}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">スクリプト内容 *</label>
               <textarea required rows={14}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
-                placeholder={PLACEHOLDERS[form.language]}
+                placeholder={PLACEHOLDER}
                 value={form.content} onChange={e => setField('content', e.target.value)} />
             </div>
           </div>

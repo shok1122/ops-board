@@ -134,7 +134,7 @@ export interface JobResultOutput {
 
 // ── Job Templates ────────────────────────────────────────────────────────────
 
-export type TemplateLanguage = 'bash' | 'ruby' | 'python'
+export type TemplateLanguage = 'bash'
 
 export interface JobTemplateConfigOption {
   value: string
@@ -255,7 +255,7 @@ export interface ServerJobResult {
 
 // ── Scripts ──────────────────────────────────────────────────────────────────
 
-export type ScriptLanguage = 'bash' | 'python' | 'ruby'
+export type ScriptLanguage = 'bash'
 
 export interface Script {
   id: string
