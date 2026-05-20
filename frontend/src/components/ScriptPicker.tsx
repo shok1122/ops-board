@@ -37,7 +37,6 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     description: b.unit ? `単位: ${b.unit}` : undefined,
     language: 'bash',
     content: b.command_template ?? '# TLS直接接続（コマンドなし）',
-    tags: ['ビルトイン', 'メトリクス'],
     source: 'builtin_metric',
     readonly: true,
     execution_type: b.execution_type ?? 'remote',
@@ -54,7 +53,6 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     description: t.description,
     language: t.language as ScriptLanguage,
     content: t.script,
-    tags: [t.category, ...t.tags],
     source: 'job_template',
     readonly: true,
     execution_type: contentExecutionType(t.script),
@@ -68,7 +66,7 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
 function userToUnified(s: Script): UnifiedScript {
   return {
     id: s.id, name: s.name, description: s.description,
-    language: s.language, content: s.content, tags: s.tags,
+    language: s.language, content: s.content,
     source: 'user', readonly: false,
     execution_type: contentExecutionType(s.content),
   }
@@ -135,7 +133,6 @@ export function ScriptPickerModal({
     const matchSearch = !q
       || s.name.toLowerCase().includes(q)
       || (s.description ?? '').toLowerCase().includes(q)
-      || s.tags.some(t => t.toLowerCase().includes(q))
     return matchLang && matchSearch
   })
 
@@ -185,7 +182,7 @@ export function ScriptPickerModal({
             <input
               autoFocus
               className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="名前・説明・タグで検索..."
+              placeholder="名前・説明で検索..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />

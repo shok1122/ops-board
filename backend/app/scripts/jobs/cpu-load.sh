@@ -4,7 +4,6 @@
 # @category system
 # @default_cron */5 * * * *
 # @default_timeout 10
-# @tags cpu,system
 read load1 load5 load15 _ < /proc/loadavg
 ncpu=$(nproc 2>/dev/null || echo 1)
 

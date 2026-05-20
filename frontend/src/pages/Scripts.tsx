@@ -19,7 +19,7 @@ const PLACEHOLDERS: Record<ScriptLanguage, string> = {
   python: '#!/usr/bin/env python3\n# スクリプトの内容を入力してください\nprint("Hello")',
   ruby: '#!/usr/bin/env ruby\n# スクリプトの内容を入力してください\nputs "Hello"',
 }
-const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '', tags: [] }
+const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '' }
 
 function contentExecutionType(content: string): 'remote' | 'local' {
   return content.includes('# @run_locally') ? 'local' : 'remote'
@@ -33,7 +33,6 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     description: b.unit ? `単位: ${b.unit}` : undefined,
     language: 'bash',
     content: b.command_template ?? '# TLS直接接続（コマンドなし）',
-    tags: ['ビルトイン', 'メトリクス'],
     source: 'builtin_metric',
     readonly: true,
     execution_type: b.execution_type ?? 'remote',
@@ -51,7 +50,6 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     description: t.description,
     language: t.language as ScriptLanguage,
     content: t.script,
-    tags: [t.category, ...t.tags],
     source: 'job_template',
     readonly: true,
     execution_type: contentExecutionType(t.script),
@@ -69,7 +67,6 @@ function userToUnified(s: Script): UnifiedScript {
     description: s.description,
     language: s.language,
     content: s.content,
-    tags: s.tags,
     source: 'user',
     readonly: false,
     execution_type: contentExecutionType(s.content),
@@ -129,14 +126,6 @@ function ScriptCard({
               <Lock className="h-3 w-3" /> 読み取り専用
             </span>
           )}
-          {script.tags.length > 0 && (
-            <div className="flex gap-1 shrink-0 flex-wrap">
-              {script.tags.slice(0, 3).map(tag => (
-                <span key={tag} className="rounded-full px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px]">{tag}</span>
-              ))}
-              {script.tags.length > 3 && <span className="text-[10px] text-gray-400">+{script.tags.length - 3}</span>}
-            </div>
-          )}
         </button>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -185,20 +174,13 @@ function ScriptModal({
 }) {
   const [form, setForm] = useState<ScriptCreate>(
     initial
-      ? { name: initial.name, description: initial.description ?? '', language: initial.language, content: initial.content, tags: initial.tags }
+      ? { name: initial.name, description: initial.description ?? '', language: initial.language, content: initial.content }
       : EMPTY_FORM
   )
-  const [tagInput, setTagInput] = useState('')
   const [saving, setSaving] = useState(false)
 
   const setField = <K extends keyof ScriptCreate>(k: K, v: ScriptCreate[K]) =>
     setForm(f => ({ ...f, [k]: v }))
-
-  const addTag = () => {
-    const t = tagInput.trim()
-    if (t && !(form.tags ?? []).includes(t)) setField('tags', [...(form.tags ?? []), t])
-    setTagInput('')
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -243,26 +225,6 @@ function ScriptModal({
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
                 placeholder={PLACEHOLDERS[form.language]}
                 value={form.content} onChange={e => setField('content', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">タグ</label>
-              <div className="flex gap-2 flex-wrap mb-2">
-                {(form.tags ?? []).map(tag => (
-                  <span key={tag} className="flex items-center gap-1 rounded-full px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs">
-                    {tag}
-                    <button type="button" onClick={() => setField('tags', (form.tags ?? []).filter(t => t !== tag))}
-                      className="hover:text-indigo-900 font-bold leading-none">×</button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="タグを入力して Enter" value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag() } }} />
-                <button type="button" onClick={addTag}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50">追加</button>
-              </div>
             </div>
           </div>
           <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4 shrink-0">

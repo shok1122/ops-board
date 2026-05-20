@@ -248,7 +248,6 @@ class ScriptCreate(BaseModel):
     description: Optional[str] = None
     language: Literal["bash", "python", "ruby"] = "bash"
     content: str
-    tags: Optional[list[str]] = None
 
 
 class ScriptUpdate(BaseModel):
@@ -256,7 +255,6 @@ class ScriptUpdate(BaseModel):
     description: Optional[str] = None
     language: Optional[Literal["bash", "python", "ruby"]] = None
     content: Optional[str] = None
-    tags: Optional[list[str]] = None
 
 
 class ScriptOut(BaseModel):
@@ -265,7 +263,6 @@ class ScriptOut(BaseModel):
     description: Optional[str]
     language: str
     content: str
-    tags: list[str]
     created_at: str
     updated_at: str
 

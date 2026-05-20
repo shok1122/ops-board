@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -37,14 +36,12 @@ def _read_content(row) -> str:
 
 
 def _row_to_out(row) -> ScriptOut:
-    tags = json.loads(row["tags"]) if row["tags"] else []
     return ScriptOut(
         id=row["id"],
         name=row["name"],
         description=row["description"],
         language=row["language"],
         content=_read_content(row),
-        tags=tags,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -68,16 +65,15 @@ async def list_scripts(language: Optional[str] = Query(default=None)):
 async def create_script(body: ScriptCreate):
     sid = new_id()
     now = now_iso()
-    tags_json = json.dumps(body.tags or [])
 
     file_path = _script_file_path(sid, body.language)
     file_path.write_text(body.content, encoding="utf-8")
 
     async with get_db() as db:
         await db.execute(
-            "INSERT INTO scripts (id, name, description, language, content, tags, file_path, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            (sid, body.name, body.description, body.language, "", tags_json, str(file_path), now, now),
+            "INSERT INTO scripts (id, name, description, language, content, file_path, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (sid, body.name, body.description, body.language, "", str(file_path), now, now),
         )
         await db.commit()
         cur = await db.execute("SELECT * FROM scripts WHERE id = ?", (sid,))
@@ -111,9 +107,6 @@ async def update_script(script_id: str, body: ScriptUpdate):
         fields["description"] = body.description
     if body.language is not None:
         fields["language"] = body.language
-    if body.tags is not None:
-        fields["tags"] = json.dumps(body.tags)
-
     # スクリプト内容の更新: ファイルに書き込む
     if body.content is not None:
         language = body.language or existing["language"]

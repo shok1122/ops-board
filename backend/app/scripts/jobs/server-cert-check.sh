@@ -5,7 +5,6 @@
 # @category network
 # @default_cron 0 0 * * *
 # @default_timeout 30
-# @tags web,health
 # 対象サーバは SERVER_HOST 環境変数から自動取得します（未設定時は localhost）
 set -e
 

@@ -53,7 +53,6 @@ Jobsスクリプトは、サーバ上で定期実行され、システムの状�
 # @category     カテゴリ（system / network / process / log / example など）
 # @default_cron */5 * * * *   # デフォルトのcron式
 # @default_timeout 30         # デフォルトのタイムアウト秒数
-# @tags         タグ1,タグ2
 ```
 
 ### `@run_locally` — ローカル実行フラグ
@@ -120,7 +119,6 @@ URL="{scheme}://$SERVER_HOST/{path}"
 # @category system
 # @default_cron */5 * * * *
 # @default_timeout 30
-# @tags tag1,tag2
 
 # ── ここに処理を記述 ──────────────────────────────────
 
@@ -143,7 +141,6 @@ printf '{"title":"チェック名","status":"%s","value":%d,"unit":"","message":
 # @category system
 # @default_cron */5 * * * *
 # @default_timeout 30
-# @tags tag1,tag2
 
 import json
 

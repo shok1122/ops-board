@@ -4,7 +4,6 @@
 # @category system
 # @default_cron 0 * * * *
 # @default_timeout 15
-# @tags disk,system
 TARGET_PATH="/"
 
 pct=$(df "$TARGET_PATH" | awk 'NR==2{gsub(/%/,""); print $5}')

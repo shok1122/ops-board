@@ -4,7 +4,6 @@
 # @category system
 # @default_cron */15 * * * *
 # @default_timeout 10
-# @tags memory,system
 read total used free <<< $(free -m | awk '/^Mem:/{print $2, $3, $4}')
 pct=$(awk "BEGIN{printf \"%d\", $used/$total*100}")
 

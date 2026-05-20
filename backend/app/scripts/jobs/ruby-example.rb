@@ -4,7 +4,6 @@
 # @category example
 # @default_cron 0 9 * * *
 # @default_timeout 30
-# @tags example,ruby
 
 require 'json'
 

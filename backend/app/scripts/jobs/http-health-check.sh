@@ -5,7 +5,6 @@
 # @category network
 # @default_cron */5 * * * *
 # @default_timeout 30
-# @tags http,web,health
 # @config_field key=scheme label="プロトコル" type=select default=http
 # @config_option scheme http HTTP
 # @config_option scheme https HTTPS

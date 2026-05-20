@@ -159,7 +159,6 @@ export interface JobTemplate {
   command: string        // heredoc-wrapped, ready for SSH execution
   default_cron: string
   default_timeout: number
-  tags: string[]
   config_fields: JobTemplateConfigField[]
 }
 
@@ -264,7 +263,6 @@ export interface Script {
   description?: string
   language: ScriptLanguage
   content: string
-  tags: string[]
   created_at: string
   updated_at: string
 }
@@ -274,7 +272,6 @@ export interface ScriptCreate {
   description?: string
   language: ScriptLanguage
   content: string
-  tags?: string[]
 }
 
 /**
@@ -289,7 +286,6 @@ export interface UnifiedScript {
   description?: string
   language: ScriptLanguage
   content: string          // コマンドテンプレート or スクリプト本体
-  tags: string[]
   source: ScriptSource
   readonly: boolean        // true = 編集・削除不可
   execution_type: ExecutionType

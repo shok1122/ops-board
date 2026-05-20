@@ -112,7 +112,6 @@ CREATE TABLE IF NOT EXISTS scripts (
     description TEXT,
     language TEXT NOT NULL DEFAULT 'bash',
     content TEXT NOT NULL,
-    tags TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

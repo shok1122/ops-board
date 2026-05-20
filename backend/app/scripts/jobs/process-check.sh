@@ -4,7 +4,6 @@
 # @category process
 # @default_cron */5 * * * *
 # @default_timeout 10
-# @tags process,availability
 PROCESS_NAME="nginx"
 
 count=$(pgrep -c "$PROCESS_NAME" 2>/dev/null || echo 0)

@@ -12,7 +12,6 @@ Metadata comment format (``# @key value``)
 ``@category``        Category string (default ``"custom"``).
 ``@default_cron``    5-field cron expression (default ``"0 * * * *"``).
 ``@default_timeout`` Timeout in seconds (default ``60``).
-``@tags``            Comma-separated tag list.
 ``@config_field``    Config-field descriptor (repeatable) – see below.
 ``@config_option``   Option descriptor for ``type=select`` fields (repeatable).
 
@@ -87,9 +86,6 @@ def _load_templates() -> list[dict]:
 
         config_fields = parse_config_fields(meta)
 
-        raw_tags = meta.get("tags", "")
-        tags = [t.strip() for t in raw_tags.split(",") if t.strip()] if raw_tags else []
-
         try:
             default_timeout = int(meta.get("default_timeout", "60"))
         except ValueError:
@@ -106,7 +102,6 @@ def _load_templates() -> list[dict]:
                 "command":         _make_command(language, script),
                 "default_cron":    meta.get("default_cron", "0 * * * *"),
                 "default_timeout": default_timeout,
-                "tags":            tags,
                 "config_fields":   [
                     {
                         "key":     cf["key"],
