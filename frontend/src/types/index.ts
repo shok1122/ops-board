@@ -145,45 +145,6 @@ export interface JobTemplate {
   config_fields: JobTemplateConfigField[]
 }
 
-// ── Builtin Metrics ──────────────────────────────────────────────────────────
-
-export type BuiltinMetricKey =
-  | 'cpu_load'
-  | 'mem_used'
-  | 'cpu_load_1m'
-  | 'cpu_load_5m'
-  | 'cpu_load_15m'
-  | 'mem_used_pct'
-  | 'mem_used_mb'
-  | 'disk_used_pct'
-  | 'disk_used_gb'
-  | 'process_count'
-  | 'ssl_cert_expiry_days'
-
-export interface BuiltinMetricConfigOption {
-  value: string
-  label: string
-  unit?: string
-  resolved_command?: string
-}
-
-export interface BuiltinMetricConfigField {
-  key: string
-  label: string
-  default: string
-  type?: 'text' | 'select'
-  options?: BuiltinMetricConfigOption[]
-}
-
-export interface BuiltinMetricDef {
-  key: BuiltinMetricKey
-  label: string
-  unit: string
-  configurable: boolean
-  config_fields?: BuiltinMetricConfigField[]
-  command_template?: string | null
-}
-
 // ── Worker Checks ────────────────────────────────────────────────────────────
 
 export interface WorkerMetric {
@@ -237,7 +198,7 @@ export interface ScriptCreate {
   content: string
 }
 
-export type ScriptSource = 'user' | 'builtin_metric' | 'job_template'
+export type ScriptSource = 'user' | 'job_template'
 
 export interface UnifiedScript {
   id: string
@@ -247,10 +208,6 @@ export interface UnifiedScript {
   content: string
   source: ScriptSource
   readonly: boolean
-  // builtin_metric 専用
-  builtinKey?: BuiltinMetricKey
-  unit?: string
-  configFields?: BuiltinMetricConfigField[]
   // job_template 専用
   category?: string
   defaultCron?: string

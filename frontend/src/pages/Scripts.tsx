@@ -1,29 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Copy, Check, Code2, Lock, ChevronDown, ChevronRight } from 'lucide-react'
-import { getScripts, createScript, updateScript, deleteScript, getBuiltinMetrics, getJobTemplates } from '../api/client'
-import type { Script, ScriptCreate, UnifiedScript, BuiltinMetricDef, JobTemplate } from '../types'
+import { getScripts, createScript, updateScript, deleteScript, getJobTemplates } from '../api/client'
+import type { Script, ScriptCreate, UnifiedScript, JobTemplate } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const PLACEHOLDER = '#!/bin/bash\n# スクリプトの内容を入力してください\necho "Hello"'
 const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '' }
-
-/** ビルトインメトリクスを UnifiedScript に変換 */
-function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
-  return {
-    id: `builtin:${b.key}`,
-    name: b.label,
-    description: b.unit ? `単位: ${b.unit}` : undefined,
-    language: 'bash',
-    content: b.command_template ?? '# TLS直接接続（コマンドなし）',
-    source: 'builtin_metric',
-    readonly: true,
-    builtinKey: b.key,
-    unit: b.unit,
-    configFields: b.config_fields,
-  }
-}
 
 /** ジョブテンプレートを UnifiedScript に変換 */
 function templateToUnified(t: JobTemplate): UnifiedScript {
@@ -127,11 +111,6 @@ function ScriptCard({
           <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap break-all max-h-64 overflow-y-auto leading-relaxed">
             {script.content}
           </pre>
-          {script.configFields && script.configFields.length > 0 && (
-            <div className="mt-2 text-[11px] text-gray-500">
-              設定可能フィールド: {script.configFields.map(f => `${f.label} (デフォルト: ${f.default})`).join(', ')}
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -176,35 +155,6 @@ echo '{"title":"サンプル","status":"ok","value":1,"unit":"","message":"正�
 # {"title":"...", "status":"ok|warn|error", "value":数値, "unit":"単位", "message":"メッセージ"}
 
 echo '{"title":"サンプル","status":"ok","value":1,"unit":"","message":"正常"}'
-`,
-  },
-  {
-    id: 'monitor-simple',
-    label: 'モニタリング（数値）',
-    hint: '数値を1行出力するモニタリングスクリプト',
-    content: `#!/bin/bash
-# @label メトリクス名
-# @unit 単位（例: %, GB, count）
-
-# 出力形式: 数値を1行のみ（例: 42.5）
-
-echo 42
-`,
-  },
-  {
-    id: 'monitor-configurable',
-    label: 'モニタリング（パラメータ付き）',
-    hint: '設定可能なパラメータを持つモニタリングスクリプト',
-    content: `#!/bin/bash
-# @label メトリクス名
-# @unit 単位（例: %, GB, count）
-# @configurable true
-# @config_field key=path label="対象パス" type=text default=/
-
-# 設定パラメータは {key} の形式で参照します（例: {path}）
-# 出力形式: 数値を1行のみ
-
-echo 42
 `,
   },
 ]
@@ -337,11 +287,6 @@ export default function Scripts() {
     queryKey: ['scripts'],
     queryFn: () => getScripts(),
   })
-  const { data: builtins = [] } = useQuery<BuiltinMetricDef[]>({
-    queryKey: ['builtin-metrics'],
-    queryFn: getBuiltinMetrics,
-    staleTime: Infinity,
-  })
   const { data: templates = [] } = useQuery<JobTemplate[]>({
     queryKey: ['job-templates'],
     queryFn: getJobTemplates,
@@ -380,7 +325,7 @@ export default function Scripts() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">スクリプト管理</h1>
-          <p className="text-sm text-gray-500 mt-0.5">ジョブ・モニタリングで使用するスクリプトを管理します</p>
+          <p className="text-sm text-gray-500 mt-0.5">ジョブで使用するスクリプトを管理します</p>
         </div>
         <button
           onClick={() => { setEditTarget(null); setModalOpen(true) }}
@@ -408,13 +353,6 @@ export default function Scripts() {
             )
           })
         )}
-      </Section>
-
-      {/* Builtin metrics */}
-      <Section title="ビルトインメトリクス" badge={`${builtins.length} 件 · 読み取り専用`}>
-        {builtins.map(b => (
-          <ScriptCard key={b.key} script={builtinToUnified(b)} />
-        ))}
       </Section>
 
       {/* Job templates by category */}

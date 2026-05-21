@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, X, BookOpen, Lock } from 'lucide-react'
-import { getScripts, getBuiltinMetrics, getJobTemplates } from '../api/client'
+import { getScripts, getJobTemplates } from '../api/client'
 import type {
-  Script, BuiltinMetricDef, JobTemplate,
+  Script, JobTemplate,
   UnifiedScript, JobTemplateConfigField,
 } from '../types'
 
@@ -11,21 +11,6 @@ import type {
 
 const CATEGORY_LABELS: Record<string, string> = {
   system: 'システム', network: 'ネットワーク', process: 'プロセス', log: 'ログ', example: 'サンプル',
-}
-
-function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
-  return {
-    id: `builtin:${b.key}`,
-    name: b.label,
-    description: b.unit ? `単位: ${b.unit}` : undefined,
-    language: 'bash',
-    content: b.command_template ?? '# TLS直接接続（コマンドなし）',
-    source: 'builtin_metric',
-    readonly: true,
-    builtinKey: b.key,
-    unit: b.unit,
-    configFields: b.config_fields,
-  }
 }
 
 function templateToUnified(t: JobTemplate): UnifiedScript {
@@ -55,20 +40,18 @@ function userToUnified(s: Script): UnifiedScript {
 // ── Source badge ──────────────────────────────────────────────────────────────
 
 const SOURCE_BADGE: Record<UnifiedScript['source'], { label: string; cls: string }> = {
-  builtin_metric: { label: 'ビルトイン', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
-  job_template:   { label: 'テンプレート', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
-  user:           { label: 'ユーザー', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
+  job_template: { label: 'テンプレート', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+  user:         { label: 'ユーザー', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 /**
  * context:
- *   'monitor' — builtin metrics + user scripts（モニター追加用）
- *   'job'     — job templates + user scripts（ジョブ追加用）
- *   'all'     — 全種類
+ *   'job' — job templates + user scripts（ジョブ追加用）
+ *   'all' — 全種類
  */
-export type ScriptPickerContext = 'monitor' | 'job' | 'all'
+export type ScriptPickerContext = 'job' | 'all'
 
 export function ScriptPickerModal({
   context = 'all',
@@ -86,12 +69,6 @@ export function ScriptPickerModal({
     queryKey: ['scripts'],
     queryFn: () => getScripts(),
   })
-  const { data: builtins = [] } = useQuery<BuiltinMetricDef[]>({
-    queryKey: ['builtin-metrics'],
-    queryFn: getBuiltinMetrics,
-    staleTime: Infinity,
-    enabled: context === 'monitor' || context === 'all',
-  })
   const { data: templates = [] } = useQuery<JobTemplate[]>({
     queryKey: ['job-templates'],
     queryFn: getJobTemplates,
@@ -101,7 +78,6 @@ export function ScriptPickerModal({
 
   // Merge and sort
   const all: UnifiedScript[] = [
-    ...builtins.map(builtinToUnified),
     ...templates.map(templateToUnified),
     ...userScripts.map(userToUnified),
   ]
@@ -118,10 +94,6 @@ export function ScriptPickerModal({
   // Group for display
   const groups: { key: string; label: string; items: UnifiedScript[] }[] = []
 
-  if (context === 'monitor' || context === 'all') {
-    const builtinItems = filtered.filter(s => s.source === 'builtin_metric')
-    if (builtinItems.length > 0) groups.push({ key: 'builtin', label: 'ビルトインメトリクス', items: builtinItems })
-  }
   if (context === 'job' || context === 'all') {
     const tplItems = filtered.filter(s => s.source === 'job_template')
     if (tplItems.length > 0) {
@@ -218,16 +190,6 @@ export function ScriptPickerModal({
                 <div className="px-4 py-3 border-b border-gray-100 shrink-0 space-y-1">
                   <p className="text-sm font-medium text-gray-800">{selected.name}</p>
                   {selected.description && <p className="text-xs text-gray-400">{selected.description}</p>}
-                  <div className="flex items-center gap-1.5">
-                    {selected.unit && (
-                      <span className="text-xs text-gray-500">単位: <span className="font-medium">{selected.unit}</span></span>
-                    )}
-                  </div>
-                  {selected.configFields && selected.configFields.length > 0 && (
-                    <p className="text-xs text-indigo-600">
-                      設定可能: {selected.configFields.map(f => f.label).join(', ')}
-                    </p>
-                  )}
                   {selected.templateConfigFields && selected.templateConfigFields.length > 0 && (
                     <p className="text-xs text-indigo-600">
                       パラメータ: {selected.templateConfigFields.map((f: JobTemplateConfigField) => f.label).join(', ')}

@@ -72,33 +72,6 @@ CREATE TABLE IF NOT EXISTS server_status (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS monitors (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    interval_minutes INTEGER NOT NULL DEFAULT 5,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    metric_type TEXT NOT NULL DEFAULT 'builtin',
-    builtin_key TEXT,
-    builtin_config TEXT,
-    custom_script TEXT,
-    unit TEXT,
-    warning_threshold REAL,
-    critical_threshold REAL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS monitor_data (
-    id TEXT PRIMARY KEY,
-    monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
-    collected_at TEXT NOT NULL,
-    value REAL,
-    error TEXT,
-    created_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -152,14 +125,6 @@ async def init_db():
         if "file_path" not in script_cols:
             await db.execute("ALTER TABLE scripts ADD COLUMN file_path TEXT")
             await db.commit()
-        # マイグレーション: monitors テーブルに last_log カラムが存在しない場合は追加
-        cur = await db.execute("PRAGMA table_info(monitors)")
-        monitor_cols = [row[1] for row in await cur.fetchall()]
-        if "last_log" not in monitor_cols:
-            await db.execute("ALTER TABLE monitors ADD COLUMN last_log TEXT")
-            await db.execute("ALTER TABLE monitors ADD COLUMN last_log_at TEXT")
-            await db.commit()
-
         # マイグレーション: jobs に execution_type カラム追加
         cur = await db.execute("PRAGMA table_info(jobs)")
         job_cols = [row[1] for row in await cur.fetchall()]
@@ -169,19 +134,6 @@ async def init_db():
             )
             await db.execute(
                 "UPDATE jobs SET execution_type = 'local' "
-                "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
-            )
-            await db.commit()
-
-        # マイグレーション: monitors に execution_type カラム追加
-        cur = await db.execute("PRAGMA table_info(monitors)")
-        monitor_cols2 = [row[1] for row in await cur.fetchall()]
-        if "execution_type" not in monitor_cols2:
-            await db.execute(
-                "ALTER TABLE monitors ADD COLUMN execution_type TEXT NOT NULL DEFAULT 'remote'"
-            )
-            await db.execute(
-                "UPDATE monitors SET execution_type = 'local' "
                 "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
             )
             await db.commit()

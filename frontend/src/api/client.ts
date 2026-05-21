@@ -4,7 +4,6 @@ import type {
   Job, JobCreate,
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
-  BuiltinMetricDef,
   WorkerCheck,
   JobTemplate,
   Script, ScriptCreate,
@@ -113,9 +112,6 @@ export const getWorkerChecks = (serverId?: string) =>
   api.get<WorkerCheck[]>('/worker-checks', {
     params: serverId ? { server_id: serverId } : undefined,
   }).then(r => r.data)
-
-export const getBuiltinMetrics = () =>
-  api.get<BuiltinMetricDef[]>('/monitors/builtin-metrics/list').then(r => r.data)
 
 // Job Templates
 export const getJobTemplates = () =>

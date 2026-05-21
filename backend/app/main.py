@@ -90,25 +90,6 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/api/v1/monitors/builtin-metrics/list", dependencies=_auth)
-async def list_builtin_metrics():
-    from app.builtin_monitors import BUILTIN_MONITOR_REGISTRY
-    result = []
-    for key, entry in BUILTIN_MONITOR_REGISTRY.items():
-        if entry.get("hidden"):
-            continue
-        result.append({
-            "key": key,
-            "label": entry.get("label", key),
-            "unit": entry.get("unit", ""),
-            "configurable": entry.get("configurable", False),
-            "config_fields": entry.get("config_fields", []),
-            "command_template": entry.get("command"),
-            "execution_type": entry.get("execution_type", "remote"),
-        })
-    return result
-
-
 @app.get("/api/v1/scheduler/status", dependencies=_auth)
 async def scheduler_status():
     return get_scheduler_status()
