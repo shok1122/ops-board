@@ -114,56 +114,90 @@ function StatusSummary({ status }: { status: ServerStatus }) {
 }
 
 function WorkerCheckCard({ c }: { c: WorkerCheck }) {
-  const statusColor =
-    c.status === 'ok' ? 'border-emerald-200 bg-emerald-50' :
-    c.status === 'error' ? 'border-red-200 bg-red-50' :
-    'border-amber-200 bg-amber-50'
-  const statusText =
-    c.status === 'ok' ? 'text-emerald-700' :
-    c.status === 'error' ? 'text-red-700' :
-    'text-amber-700'
-  const labelColor =
-    c.status === 'ok' ? 'text-emerald-600' :
-    c.status === 'error' ? 'text-red-600' :
-    'text-amber-600'
+  const accentBar =
+    c.status === 'ok' ? 'bg-emerald-400' :
+    c.status === 'error' ? 'bg-red-400' :
+    'bg-amber-400'
+  const statusBadge =
+    c.status === 'ok'
+      ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' :
+    c.status === 'error'
+      ? 'bg-red-100 text-red-700 ring-1 ring-red-200' :
+      'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
+  const messageBorder =
+    c.status === 'ok' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' :
+    c.status === 'error' ? 'border-red-300 bg-red-50 text-red-800' :
+    'border-amber-300 bg-amber-50 text-amber-800'
 
   const labelEntries = Object.entries(c.labels ?? {})
 
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs ${statusColor}`}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className={`font-semibold ${statusText}`}>{c.check_name}</span>
-        <span className={`text-[10px] uppercase tracking-wide ${labelColor}`}>{c.status}</span>
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* Status accent bar */}
+      <div className={`h-1 ${accentBar}`} />
+
+      {/* Header */}
+      <div className="px-3 pt-2.5 pb-2">
+        <div className="text-[10px] text-gray-400 mb-1.5">
+          {new Date(c.reported_at).toLocaleString('ja-JP')}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="font-semibold text-gray-900 text-xs leading-snug">{c.check_name}</span>
+            {c.check_type && (
+              <span className="ml-1.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 align-middle">
+                {c.check_type}
+              </span>
+            )}
+          </div>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge}`}>
+            {c.status}
+          </span>
+        </div>
       </div>
-      {c.check_type && (
-        <div className="text-[10px] text-gray-400 mb-1">{c.check_type}</div>
-      )}
+
+      {/* Message */}
       {c.message && (
-        <div className={`mb-1 ${statusText}`}>{c.message}</div>
+        <div className={`mx-3 mb-2 border-l-2 pl-2 pr-2 py-1 rounded-r-md text-xs ${messageBorder}`}>
+          {c.message}
+        </div>
       )}
+
+      {/* Metrics */}
       {c.metrics.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+        <div className="px-3 pb-2 grid grid-cols-2 gap-1.5">
           {c.metrics.map((m, i) => (
-            <span key={i} className="tabular-nums text-gray-700">
-              <span className="text-gray-400">{m.name}: </span>
-              {Number.isInteger(m.value) ? m.value : m.value.toFixed(2)}{m.unit}
+            <div key={i} className="rounded-lg bg-gray-50 px-2.5 py-1.5">
+              <div className="text-[10px] text-gray-400 truncate mb-0.5">{m.name}</div>
+              <div className="text-sm font-semibold text-gray-800 tabular-nums leading-none">
+                {Number.isInteger(m.value) ? m.value : m.value.toFixed(2)}
+                <span className="text-xs font-normal text-gray-400 ml-0.5">{m.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Labels */}
+      {labelEntries.length > 0 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-1">
+          {labelEntries.map(([k, v]) => (
+            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 ring-1 ring-gray-200">
+              <span className="text-gray-400">{k}</span>
+              <span className="text-gray-300">·</span>
+              <span>{v}</span>
             </span>
           ))}
         </div>
       )}
-      {labelEntries.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
-          {labelEntries.map(([k, v]) => (
-            <span key={k} className="text-gray-400">{k}: <span className="text-gray-600">{v}</span></span>
-          ))}
+
+      {/* Error */}
+      {c.error && (
+        <div className="mx-3 mb-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-700 ring-1 ring-red-200">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{c.error}</span>
         </div>
       )}
-      {c.error && (
-        <div className="text-red-600 mt-1">{c.error}</div>
-      )}
-      <div className="text-[10px] text-gray-400 mt-1">
-        {new Date(c.reported_at).toLocaleString('ja-JP')} 報告
-      </div>
     </div>
   )
 }
@@ -179,7 +213,7 @@ function ServerWorkerChecks({ serverId }: { serverId: string }) {
 
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-gray-500 mb-2">ワーカーチェック</p>
+      <p className="text-xs font-medium text-gray-500 mb-2">リモート実行結果</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {checks.map(c => <WorkerCheckCard key={c.id} c={c} />)}
       </div>
