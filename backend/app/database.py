@@ -106,6 +106,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('status_check_interval_minutes', '10');
 
+CREATE TABLE IF NOT EXISTS worker_checks (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    check_name TEXT NOT NULL,
+    check_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    metrics_json TEXT,
+    labels_json TEXT,
+    error TEXT,
+    reported_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(server_id, check_name)
+);
+
 CREATE TABLE IF NOT EXISTS scripts (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -170,6 +185,21 @@ async def init_db():
                 "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
             )
             await db.commit()
+
+        # マイグレーション: servers に worker_token カラム追加
+        cur = await db.execute("PRAGMA table_info(servers)")
+        server_cols2 = [row[1] for row in await cur.fetchall()]
+        if "worker_token" not in server_cols2:
+            await db.execute("ALTER TABLE servers ADD COLUMN worker_token TEXT")
+            await db.commit()
+
+        # マイグレーション: server_status にエージェント情報カラム追加
+        cur = await db.execute("PRAGMA table_info(server_status)")
+        ss_cols = [row[1] for row in await cur.fetchall()]
+        for col in ["agent_version", "go_version", "arch", "hostname"]:
+            if col not in ss_cols:
+                await db.execute(f"ALTER TABLE server_status ADD COLUMN {col} TEXT")
+        await db.commit()
 
 
 @asynccontextmanager

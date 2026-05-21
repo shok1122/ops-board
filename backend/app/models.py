@@ -7,44 +7,21 @@ from pydantic import BaseModel, Field
 
 class ServerCreate(BaseModel):
     name: str
-    host: str
-    port: int = 22
-    username: Optional[str] = None
-    auth_type: Literal["password", "key"] = "password"
-    password: Optional[str] = None
-    private_key: Optional[str] = None
-    passphrase: Optional[str] = None
+    host: Optional[str] = None
 
 
 class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
-    port: Optional[int] = None
-    username: Optional[str] = None
-    auth_type: Optional[Literal["password", "key"]] = None
-    password: Optional[str] = None
-    private_key: Optional[str] = None
-    passphrase: Optional[str] = None
-    clear_ssh: Optional[bool] = None
 
 
 class ServerOut(BaseModel):
     id: str
     name: str
     host: str
-    port: int
-    has_ssh: bool
-    username: Optional[str]
-    auth_type: str
+    worker_token: Optional[str] = None
     created_at: str
     updated_at: str
-
-
-class TestResult(BaseModel):
-    ok: bool
-    latency_ms: Optional[float] = None
-    cert_expiry_days: Optional[float] = None
-    error: Optional[str] = None
 
 
 class ServerStatusOut(BaseModel):
@@ -59,6 +36,10 @@ class ServerStatusOut(BaseModel):
     uptime_seconds: Optional[int] = None
     os_info: Optional[str] = None
     error: Optional[str] = None
+    agent_version: Optional[str] = None
+    go_version: Optional[str] = None
+    arch: Optional[str] = None
+    hostname: Optional[str] = None
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────
@@ -79,7 +60,6 @@ class JobCreate(BaseModel):
     cron_expr: str
     enabled: bool = True
     timeout_sec: int = Field(default=30, ge=1, le=3600)
-    execution_type: Literal["remote", "local"] = "local"
 
 
 class JobUpdate(BaseModel):
@@ -92,7 +72,6 @@ class JobUpdate(BaseModel):
     cron_expr: Optional[str] = None
     enabled: Optional[bool] = None
     timeout_sec: Optional[int] = None
-    execution_type: Optional[Literal["remote", "local"]] = None
 
 
 class JobOut(BaseModel):
@@ -107,7 +86,6 @@ class JobOut(BaseModel):
     cron_expr: str
     enabled: bool
     timeout_sec: int
-    execution_type: str
     last_run_at: Optional[str]
     last_status: Optional[str]
     created_at: str
@@ -172,88 +150,18 @@ class ServerJobResult(BaseModel):
     raw_stdout: Optional[str] = None
 
 
-# ── Monitors ─────────────────────────────────────────────────────────────────
-
-
-class MonitorCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    server_id: str
-    interval_minutes: int = Field(default=5, ge=1, le=44640)  # 最大31日
-    enabled: bool = True
-    metric_type: Literal["builtin", "custom"] = "builtin"
-    builtin_key: Optional[str] = None
-    builtin_config: Optional[dict] = None
-    custom_script: Optional[str] = None
-    unit: Optional[str] = None
-    warning_threshold: Optional[float] = None
-    critical_threshold: Optional[float] = None
-    execution_type: Literal["remote", "local"] = "local"
-
-
-class MonitorUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    server_id: Optional[str] = None
-    interval_minutes: Optional[int] = Field(default=None, ge=1, le=44640)
-    enabled: Optional[bool] = None
-    metric_type: Optional[Literal["builtin", "custom"]] = None
-    builtin_key: Optional[str] = None
-    builtin_config: Optional[dict] = None
-    custom_script: Optional[str] = None
-    unit: Optional[str] = None
-    warning_threshold: Optional[float] = None
-    critical_threshold: Optional[float] = None
-    execution_type: Optional[Literal["remote", "local"]] = None
-
-
-class MonitorOut(BaseModel):
-    id: str
-    name: str
-    description: Optional[str]
-    server_id: str
-    server_name: Optional[str] = None
-    interval_minutes: int
-    enabled: bool
-    metric_type: str
-    builtin_key: Optional[str]
-    builtin_config: Optional[dict]
-    custom_script: Optional[str]
-    unit: Optional[str]
-    warning_threshold: Optional[float]
-    critical_threshold: Optional[float]
-    execution_type: str
-    created_at: str
-    updated_at: str
-
-
-class MonitorDataPoint(BaseModel):
-    id: str
-    monitor_id: str
-    collected_at: str
-    value: Optional[float] = None
-    error: Optional[str] = None
-
-
-class MonitorLastLog(BaseModel):
-    monitor_id: str
-    last_log_at: Optional[str] = None
-    log: Optional[str] = None
-
-
 # ── Scripts ──────────────────────────────────────────────────────────────────
 
 class ScriptCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    language: Literal["bash", "python", "ruby"] = "bash"
+    language: Literal["bash"] = "bash"
     content: str
 
 
 class ScriptUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    language: Optional[Literal["bash", "python", "ruby"]] = None
     content: Optional[str] = None
 
 

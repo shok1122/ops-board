@@ -25,7 +25,4 @@ async def update_settings(body: AppSettings):
         )
         await db.commit()
 
-    from app.scheduler import schedule_status_check
-    schedule_status_check(body.status_check_interval_minutes)
-
     return body

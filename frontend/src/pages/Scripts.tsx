@@ -9,10 +9,6 @@ import type { Script, ScriptCreate, UnifiedScript, BuiltinMetricDef, JobTemplate
 const PLACEHOLDER = '#!/bin/bash\n# スクリプトの内容を入力してください\necho "Hello"'
 const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '' }
 
-function contentExecutionType(content: string): 'remote' | 'local' {
-  return content.includes('# @run_locally') ? 'local' : 'remote'
-}
-
 /** ビルトインメトリクスを UnifiedScript に変換 */
 function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
   return {
@@ -23,7 +19,6 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     content: b.command_template ?? '# TLS直接接続（コマンドなし）',
     source: 'builtin_metric',
     readonly: true,
-    execution_type: b.execution_type ?? 'remote',
     builtinKey: b.key,
     unit: b.unit,
     configFields: b.config_fields,
@@ -40,7 +35,6 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     content: t.script,
     source: 'job_template',
     readonly: true,
-    execution_type: contentExecutionType(t.script),
     category: t.category,
     defaultCron: t.default_cron,
     defaultTimeout: t.default_timeout,
@@ -57,7 +51,6 @@ function userToUnified(s: Script): UnifiedScript {
     content: s.content,
     source: 'user',
     readonly: false,
-    execution_type: contentExecutionType(s.content),
   }
 }
 

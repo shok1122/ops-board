@@ -1,26 +1,21 @@
 import json
+import secrets
 from fastapi import APIRouter, HTTPException
 from app.database import get_db, new_id, now_iso
-from app.crypto import encrypt, decrypt
 from app.models import (
-    ServerCreate, ServerUpdate, ServerOut, TestResult,
+    ServerCreate, ServerUpdate, ServerOut,
     ServerStatusOut, ServerJobResult, JobResultOutput, PagedResponse,
 )
-from app.ssh import test_connection, get_system_status
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 
 
-def _row_to_out(row) -> ServerOut:
-    username = row["username"] or None
+def _row_to_out(row, show_token: bool = False) -> ServerOut:
     return ServerOut(
         id=row["id"],
         name=row["name"],
-        host=row["host"],
-        port=row["port"],
-        has_ssh=bool(username),
-        username=username,
-        auth_type=row["auth_type"],
+        host=row["host"] or "",
+        worker_token=row["worker_token"] if show_token else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -39,25 +34,18 @@ async def list_servers():
 async def create_server(body: ServerCreate):
     now = now_iso()
     sid = new_id()
-    username = body.username or ""
+    worker_token = secrets.token_urlsafe(32)
     async with get_db() as db:
         await db.execute(
             "INSERT INTO servers (id, name, host, port, username, auth_type, "
-            "password_enc, private_key_enc, passphrase_enc, server_type, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                sid, body.name, body.host, body.port, username, body.auth_type,
-                encrypt(body.password) if body.password else None,
-                encrypt(body.private_key) if body.private_key else None,
-                encrypt(body.passphrase) if body.passphrase else None,
-                "remote_execution" if username else "local_execution",
-                now, now,
-            ),
+            "server_type, worker_token, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (sid, body.name, body.host or "", 443, "", "password", "ops_worker", worker_token, now, now),
         )
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (sid,))
         row = await cur.fetchone()
-    return _row_to_out(row)
+    return _row_to_out(row, show_token=True)
 
 
 @router.get("/{server_id}", response_model=ServerOut)
@@ -74,35 +62,14 @@ async def get_server(server_id: str):
 async def update_server(server_id: str, body: ServerUpdate):
     async with get_db() as db:
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (server_id,))
-        existing = await cur.fetchone()
-        if not existing:
+        if not await cur.fetchone():
             raise HTTPException(404, "Server not found")
 
-        updates = {}
+        updates: dict = {}
         if body.name is not None:
             updates["name"] = body.name
         if body.host is not None:
             updates["host"] = body.host
-        if body.port is not None:
-            updates["port"] = body.port
-        if body.clear_ssh:
-            updates["username"] = ""
-            updates["password_enc"] = None
-            updates["private_key_enc"] = None
-            updates["passphrase_enc"] = None
-            updates["server_type"] = "local_execution"
-        else:
-            if body.username is not None:
-                updates["username"] = body.username
-                updates["server_type"] = "remote_execution" if body.username else "local_execution"
-            if body.auth_type is not None:
-                updates["auth_type"] = body.auth_type
-            if body.password is not None:
-                updates["password_enc"] = encrypt(body.password)
-            if body.private_key is not None:
-                updates["private_key_enc"] = encrypt(body.private_key)
-            if body.passphrase is not None:
-                updates["passphrase_enc"] = encrypt(body.passphrase)
         updates["updated_at"] = now_iso()
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -126,77 +93,6 @@ async def delete_server(server_id: str):
         await db.commit()
 
 
-@router.post("/{server_id}/test", response_model=TestResult)
-async def test_server(server_id: str):
-    async with get_db() as db:
-        cur = await db.execute("SELECT * FROM servers WHERE id = ?", (server_id,))
-        row = await cur.fetchone()
-    if not row:
-        raise HTTPException(404, "Server not found")
-
-    if not (row["username"] or "").strip():
-        return TestResult(ok=False, error="SSH接続情報が未設定です")
-
-    password = decrypt(row["password_enc"]) if row["password_enc"] else None
-    private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None
-    passphrase = decrypt(row["passphrase_enc"]) if row["passphrase_enc"] else None
-
-    ok, latency, error = await test_connection(
-        row["host"], row["port"], row["username"],
-        password=password, private_key=private_key, passphrase=passphrase,
-    )
-    return TestResult(ok=ok, latency_ms=latency, error=error)
-
-
-@router.post("/{server_id}/status", response_model=ServerStatusOut)
-async def check_server_status(server_id: str):
-    async with get_db() as db:
-        cur = await db.execute("SELECT * FROM servers WHERE id = ?", (server_id,))
-        row = await cur.fetchone()
-    if not row:
-        raise HTTPException(404, "Server not found")
-
-    if not (row["username"] or "").strip():
-        raise HTTPException(400, "SSH接続情報が未設定のサーバはシステムステータスチェックに対応していません")
-
-    password = decrypt(row["password_enc"]) if row["password_enc"] else None
-    private_key = decrypt(row["private_key_enc"]) if row["private_key_enc"] else None
-    passphrase = decrypt(row["passphrase_enc"]) if row["passphrase_enc"] else None
-
-    try:
-        metrics = await get_system_status(
-            row["host"], row["port"], row["username"],
-            password=password, private_key=private_key, passphrase=passphrase,
-        )
-    except Exception as exc:
-        metrics = {
-            "cpu_load_1m": None, "mem_used_mb": None, "mem_total_mb": None,
-            "disk_used_gb": None, "disk_total_gb": None,
-            "uptime_seconds": None, "os_info": None,
-            "error": str(exc),
-        }
-
-    now = now_iso()
-    status_id = new_id()
-    async with get_db() as db:
-        await db.execute(
-            "INSERT INTO server_status "
-            "(id, server_id, checked_at, cpu_load_1m, mem_used_mb, mem_total_mb, "
-            "disk_used_gb, disk_total_gb, uptime_seconds, os_info, error, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                status_id, server_id, now,
-                metrics["cpu_load_1m"], metrics["mem_used_mb"], metrics["mem_total_mb"],
-                metrics["disk_used_gb"], metrics["disk_total_gb"],
-                metrics["uptime_seconds"], metrics["os_info"], metrics["error"],
-                now,
-            ),
-        )
-        await db.commit()
-
-    return ServerStatusOut(id=status_id, server_id=server_id, checked_at=now, **metrics)
-
-
 @router.get("/statuses/latest", response_model=list[ServerStatusOut])
 async def get_all_latest_statuses():
     """Return the most recent status check for every server."""
@@ -216,6 +112,8 @@ async def get_all_latest_statuses():
             mem_total_mb=r["mem_total_mb"], disk_used_gb=r["disk_used_gb"],
             disk_total_gb=r["disk_total_gb"], uptime_seconds=r["uptime_seconds"],
             os_info=r["os_info"], error=r["error"],
+            agent_version=r["agent_version"], go_version=r["go_version"],
+            arch=r["arch"], hostname=r["hostname"],
         )
         for r in rows
     ]
@@ -239,8 +137,10 @@ async def get_server_status_history(server_id: str, limit: int = 48):
             mem_total_mb=r["mem_total_mb"], disk_used_gb=r["disk_used_gb"],
             disk_total_gb=r["disk_total_gb"], uptime_seconds=r["uptime_seconds"],
             os_info=r["os_info"], error=r["error"],
+            agent_version=r["agent_version"], go_version=r["go_version"],
+            arch=r["arch"], hostname=r["hostname"],
         )
-        for r in reversed(rows)  # oldest first for charts
+        for r in reversed(rows)
     ]
 
 
@@ -252,7 +152,6 @@ async def get_server_job_results(server_id: str):
         if not await cur.fetchone():
             raise HTTPException(404, "Server not found")
 
-        # Latest execution per job for this server
         cur = await db.execute(
             "SELECT e.id, e.job_id, j.name AS job_name, e.status AS execution_status, "
             "e.finished_at, e.stdout, e.parsed_result "
@@ -273,9 +172,6 @@ async def get_server_job_results(server_id: str):
         output = None
         raw_stdout = row["stdout"]
 
-        # stdout is expected to be a single JSON object (job_result_schema.json format).
-        # This applies to both command (stdout of the command) and
-        # log_fetch (contents of the JSON file).
         if row["stdout"]:
             lines = [line for line in row["stdout"].splitlines() if line.strip()]
             if lines:

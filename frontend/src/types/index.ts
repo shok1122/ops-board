@@ -2,31 +2,14 @@ export interface Server {
   id: string
   name: string
   host: string
-  port: number
-  has_ssh: boolean
-  username?: string
-  auth_type: 'password' | 'key'
+  worker_token?: string
   created_at: string
   updated_at: string
 }
 
 export interface ServerCreate {
   name: string
-  host: string
-  port: number
-  username?: string
-  auth_type: 'password' | 'key'
-  password?: string
-  private_key?: string
-  passphrase?: string
-  clear_ssh?: boolean
-}
-
-export interface TestResult {
-  ok: boolean
-  latency_ms?: number
-  cert_expiry_days?: number
-  error?: string
+  host?: string
 }
 
 export interface ServerStatus {
@@ -41,9 +24,11 @@ export interface ServerStatus {
   uptime_seconds?: number
   os_info?: string
   error?: string
+  agent_version?: string
+  go_version?: string
+  arch?: string
+  hostname?: string
 }
-
-export type ExecutionType = 'remote' | 'local'
 
 export interface Job {
   id: string
@@ -57,7 +42,6 @@ export interface Job {
   cron_expr: string
   enabled: boolean
   timeout_sec: number
-  execution_type: ExecutionType
   last_run_at?: string
   last_status?: string
   created_at: string
@@ -74,7 +58,6 @@ export interface JobCreate {
   cron_expr: string
   enabled: boolean
   timeout_sec: number
-  execution_type: ExecutionType
 }
 
 export type ExecutionStatus = 'running' | 'success' | 'failure' | 'timeout'
@@ -156,15 +139,13 @@ export interface JobTemplate {
   category: string
   language: TemplateLanguage
   script: string
-  command: string        // heredoc-wrapped, ready for SSH execution
+  command: string
   default_cron: string
   default_timeout: number
   config_fields: JobTemplateConfigField[]
 }
 
-// ── Monitors ─────────────────────────────────────────────────────────────────
-
-export type MonitorMetricType = 'builtin' | 'custom'
+// ── Builtin Metrics ──────────────────────────────────────────────────────────
 
 export type BuiltinMetricKey =
   | 'cpu_load'
@@ -182,9 +163,7 @@ export type BuiltinMetricKey =
 export interface BuiltinMetricConfigOption {
   value: string
   label: string
-  /** この選択肢を選んだときに自動セットされる unit */
   unit?: string
-  /** この選択肢を選んだときに実行されるコマンド（プレビュー用） */
   resolved_command?: string
 }
 
@@ -203,44 +182,28 @@ export interface BuiltinMetricDef {
   configurable: boolean
   config_fields?: BuiltinMetricConfigField[]
   command_template?: string | null
-  execution_type?: ExecutionType
 }
 
-export interface MonitorCreate {
+// ── Worker Checks ────────────────────────────────────────────────────────────
+
+export interface WorkerMetric {
   name: string
-  description?: string
+  value: number
+  unit: string
+}
+
+export interface WorkerCheck {
+  id: string
   server_id: string
-  interval_minutes: number
-  enabled: boolean
-  metric_type: MonitorMetricType
-  builtin_key?: BuiltinMetricKey
-  builtin_config?: Record<string, string>
-  custom_script?: string
-  unit?: string
-  warning_threshold?: number
-  critical_threshold?: number
-  execution_type: ExecutionType
-}
-
-export interface Monitor extends MonitorCreate {
-  id: string
   server_name?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface MonitorDataPoint {
-  id: string
-  monitor_id: string
-  collected_at: string
-  value?: number
+  check_name: string
+  check_type: string
+  status: string
+  message?: string
+  metrics: WorkerMetric[]
+  labels: Record<string, string>
   error?: string
-}
-
-export interface MonitorLastLog {
-  monitor_id: string
-  last_log_at: string | null
-  log: string | null
+  reported_at: string
 }
 
 export interface ServerJobResult {
@@ -274,10 +237,6 @@ export interface ScriptCreate {
   content: string
 }
 
-/**
- * Scripts / BuiltinMetrics / JobTemplates を統合した表示用型。
- * source によって読み取り専用かどうか、選択時の挙動が変わる。
- */
 export type ScriptSource = 'user' | 'builtin_metric' | 'job_template'
 
 export interface UnifiedScript {
@@ -285,10 +244,9 @@ export interface UnifiedScript {
   name: string
   description?: string
   language: ScriptLanguage
-  content: string          // コマンドテンプレート or スクリプト本体
+  content: string
   source: ScriptSource
-  readonly: boolean        // true = 編集・削除不可
-  execution_type: ExecutionType
+  readonly: boolean
   // builtin_metric 専用
   builtinKey?: BuiltinMetricKey
   unit?: string

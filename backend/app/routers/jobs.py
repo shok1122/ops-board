@@ -19,7 +19,6 @@ def _row_to_out(row) -> JobOut:
         cron_expr=row["cron_expr"],
         enabled=bool(row["enabled"]),
         timeout_sec=row["timeout_sec"],
-        execution_type=row["execution_type"] if "execution_type" in row.keys() else "remote",
         last_run_at=row["last_run_at"],
         last_status=row["last_status"],
         created_at=row["created_at"],
@@ -65,7 +64,7 @@ async def create_job(body: JobCreate):
                 jid, body.name, body.description, body.server_id,
                 body.type, body.command, body.log_path,
                 body.cron_expr, int(body.enabled), body.timeout_sec,
-                body.execution_type,
+                "local",
                 now, now,
             ),
         )
@@ -124,8 +123,6 @@ async def update_job(job_id: str, body: JobUpdate):
             updates["enabled"] = int(body.enabled)
         if body.timeout_sec is not None:
             updates["timeout_sec"] = body.timeout_sec
-        if body.execution_type is not None:
-            updates["execution_type"] = body.execution_type
         updates["updated_at"] = now_iso()
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)

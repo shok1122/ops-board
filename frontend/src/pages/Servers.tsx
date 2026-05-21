@@ -1,23 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Wifi, WifiOff, Loader2, Server, Activity, AlertCircle, ShieldCheck} from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import {
-  getServers, createServer, updateServer, deleteServer, testServer,
-  checkServerStatus, getAllLatestStatuses,
+  getServers, createServer, updateServer, deleteServer,
+  getAllLatestStatuses,
   getServerJobResults,
-  getMonitors, getMonitorData,
+  getWorkerChecks,
 } from '../api/client'
-import type { Server as ServerType, ServerCreate, ServerStatus, Monitor, MonitorDataPoint } from '../types'
+import type { Server as ServerType, ServerCreate, ServerStatus, WorkerCheck } from '../types'
 import { JobResultCard } from '../components/JobResultView'
 
-const emptyForm: ServerCreate & { enable_ssh: boolean } = {
-  name: '', host: '', port: 22,
-  username: '', auth_type: 'password', password: '', private_key: '', passphrase: '',
-  enable_ssh: false,
-}
+const emptyForm: ServerCreate = { name: '', host: '' }
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -27,7 +23,6 @@ function formatUptime(seconds: number): string {
   if (h > 0) return `${h}時間 ${m}分`
   return `${m}分`
 }
-
 
 function MiniChart({
   data, dataKey, label, color, unit, warnAt,
@@ -98,9 +93,17 @@ function StatusSummary({ status }: { status: ServerStatus }) {
   const diskPct = status.disk_total_gb && status.disk_used_gb
     ? Math.round((status.disk_used_gb / status.disk_total_gb) * 100) : null
 
+  const agentLabel = [
+    status.agent_version,
+    status.go_version && `Go ${status.go_version}`,
+    status.arch,
+  ].filter(Boolean).join(' / ')
+
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+      {status.hostname && <span className="text-gray-500 w-full font-medium">{status.hostname}</span>}
       {status.os_info && <span className="text-gray-400 w-full">{status.os_info}</span>}
+      {agentLabel && <Chip label="Agent" value={agentLabel} />}
       {status.cpu_load_1m != null && <Chip label="CPU" value={`${status.cpu_load_1m.toFixed(2)}`} />}
       {memPct != null && <Chip label="メモリ" value={`${status.mem_used_mb}/${status.mem_total_mb}MB (${memPct}%)`} warn={memPct > 80} />}
       {diskPct != null && <Chip label="ディスク" value={`${status.disk_used_gb}/${status.disk_total_gb}GB (${diskPct}%)`} warn={diskPct > 80} />}
@@ -110,46 +113,75 @@ function StatusSummary({ status }: { status: ServerStatus }) {
   )
 }
 
+function WorkerCheckCard({ c }: { c: WorkerCheck }) {
+  const statusColor =
+    c.status === 'ok' ? 'border-emerald-200 bg-emerald-50' :
+    c.status === 'error' ? 'border-red-200 bg-red-50' :
+    'border-amber-200 bg-amber-50'
+  const statusText =
+    c.status === 'ok' ? 'text-emerald-700' :
+    c.status === 'error' ? 'text-red-700' :
+    'text-amber-700'
+  const labelColor =
+    c.status === 'ok' ? 'text-emerald-600' :
+    c.status === 'error' ? 'text-red-600' :
+    'text-amber-600'
 
-function MonitorMiniChart({ monitor }: { monitor: Monitor }) {
-  const { data: points = [] } = useQuery<MonitorDataPoint[]>({
-    queryKey: ['monitor-data', monitor.id],
-    queryFn: () => getMonitorData(monitor.id, 24, 48),
-    refetchInterval: monitor.interval_minutes * 60 * 1000,
-  })
-
-  const chartData = points.map(p => ({
-    time: new Date(p.collected_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
-    value: p.value ?? null,
-  }))
+  const labelEntries = Object.entries(c.labels ?? {})
 
   return (
-    <MiniChart
-      data={chartData}
-      dataKey="value"
-      label={monitor.name}
-      color="#8b5cf6"
-      unit={monitor.unit ?? ''}
-      warnAt={monitor.warning_threshold ?? undefined}
-    />
+    <div className={`rounded-lg border px-3 py-2 text-xs ${statusColor}`}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className={`font-semibold ${statusText}`}>{c.check_name}</span>
+        <span className={`text-[10px] uppercase tracking-wide ${labelColor}`}>{c.status}</span>
+      </div>
+      {c.check_type && (
+        <div className="text-[10px] text-gray-400 mb-1">{c.check_type}</div>
+      )}
+      {c.message && (
+        <div className={`mb-1 ${statusText}`}>{c.message}</div>
+      )}
+      {c.metrics.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+          {c.metrics.map((m, i) => (
+            <span key={i} className="tabular-nums text-gray-700">
+              <span className="text-gray-400">{m.name}: </span>
+              {Number.isInteger(m.value) ? m.value : m.value.toFixed(2)}{m.unit}
+            </span>
+          ))}
+        </div>
+      )}
+      {labelEntries.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+          {labelEntries.map(([k, v]) => (
+            <span key={k} className="text-gray-400">{k}: <span className="text-gray-600">{v}</span></span>
+          ))}
+        </div>
+      )}
+      {c.error && (
+        <div className="text-red-600 mt-1">{c.error}</div>
+      )}
+      <div className="text-[10px] text-gray-400 mt-1">
+        {new Date(c.reported_at).toLocaleString('ja-JP')} 報告
+      </div>
+    </div>
   )
 }
 
-function ServerMonitorCharts({ serverId }: { serverId: string }) {
-  const { data: monitors = [] } = useQuery<Monitor[]>({
-    queryKey: ['monitors', serverId],
-    queryFn: () => getMonitors(serverId),
-    refetchInterval: 60_000,
+function ServerWorkerChecks({ serverId }: { serverId: string }) {
+  const { data: checks = [] } = useQuery<WorkerCheck[]>({
+    queryKey: ['worker-checks', serverId],
+    queryFn: () => getWorkerChecks(serverId),
+    refetchInterval: 30_000,
   })
 
-  const enabled = monitors.filter(m => m.enabled)
-  if (enabled.length === 0) return null
+  if (checks.length === 0) return null
 
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-gray-500 mb-2">Monitor</p>
-      <div className="grid grid-cols-3 gap-4">
-        {enabled.map(m => <MonitorMiniChart key={m.id} monitor={m} />)}
+      <p className="text-xs font-medium text-gray-500 mb-2">ワーカーチェック</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {checks.map(c => <WorkerCheckCard key={c.id} c={c} />)}
       </div>
     </div>
   )
@@ -185,19 +217,59 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
   )
 }
 
-type FormState = ServerCreate & { enable_ssh: boolean }
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+function WorkerCredentials({ server }: { server: ServerType }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="mt-3">
+      <button
+        onClick={() => setShow(s => !s)}
+        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
+      >
+        <KeyRound className="h-3.5 w-3.5" />
+        ワーカー接続情報 {show ? '▲' : '▼'}
+      </button>
+      {show && (
+        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 w-14 shrink-0">Worker ID</span>
+            <code className="flex-1 font-mono text-gray-800 truncate">{server.id}</code>
+            <CopyButton text={server.id} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 w-14 shrink-0">Endpoint</span>
+            <code className="flex-1 font-mono text-gray-800 text-[10px]">{window.location.origin}/api/v1</code>
+            <CopyButton text={`${window.location.origin}/api/v1`} />
+          </div>
+          <p className="text-gray-400 text-[10px] pt-1">トークンはサーバ登録時に一度だけ表示されます。</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Servers() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
-  const [form, setForm] = useState<FormState>(emptyForm)
-  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms?: number; cert_expiry_days?: number; error?: string; testing: boolean }>>({})
-  const [statusData, setStatusData] = useState<Record<string, { loading: boolean; data?: ServerStatus }>>({})
+  const [form, setForm] = useState<ServerCreate>(emptyForm)
+  const [newServerToken, setNewServerToken] = useState<{ id: string; name: string; token: string } | null>(null)
+  const [statusData, setStatusData] = useState<Record<string, { data?: ServerStatus }>>({})
   const { data: latestStatuses } = useQuery({
     queryKey: ['server-statuses'],
     queryFn: getAllLatestStatuses,
-    refetchInterval: 600_000,
+    refetchInterval: 60_000,
   })
 
   useEffect(() => {
@@ -205,7 +277,7 @@ export default function Servers() {
     setStatusData(prev => {
       const next = { ...prev }
       for (const s of latestStatuses) {
-        next[s.server_id] = { loading: false, data: s }
+        next[s.server_id] = { data: s }
       }
       return next
     })
@@ -213,7 +285,13 @@ export default function Servers() {
 
   const createMut = useMutation({
     mutationFn: createServer,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['servers'] }); closeModal() },
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ['servers'] })
+      closeModal()
+      if (created.worker_token) {
+        setNewServerToken({ id: created.id, name: created.name, token: created.worker_token })
+      }
+    },
   })
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<ServerCreate> }) => updateServer(id, data),
@@ -226,47 +304,17 @@ export default function Servers() {
 
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
-    setForm({
-      name: s.name, host: s.host, port: s.port,
-      username: s.username ?? '', auth_type: s.auth_type,
-      password: '', private_key: '', passphrase: '',
-      enable_ssh: s.has_ssh,
-    })
+    setForm({ name: s.name, host: s.host })
     setModal({ open: true, editing: s })
   }
   const closeModal = () => setModal({ open: false })
 
-  const handleTest = async (id: string) => {
-    setTestResults(r => ({ ...r, [id]: { ok: false, testing: true } }))
-    try {
-      const res = await testServer(id)
-      setTestResults(r => ({ ...r, [id]: { ...res, testing: false } }))
-    } catch {
-      setTestResults(r => ({ ...r, [id]: { ok: false, error: 'リクエスト失敗', testing: false } }))
-    }
-  }
-
-  const handleCheckNow = async (id: string) => {
-    setStatusData(s => ({ ...s, [id]: { ...s[id], loading: true } }))
-    try {
-      const res = await checkServerStatus(id)
-      setStatusData(s => ({ ...s, [id]: { loading: false, data: res } }))
-    } catch {
-      setStatusData(s => ({ ...s, [id]: { loading: false, data: { id: '', server_id: id, checked_at: '', error: '取得失敗' } } }))
-    }
-  }
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const { enable_ssh, ...rest } = form
-    const payload: ServerCreate = enable_ssh
-      ? rest
-      : { name: rest.name, host: rest.host, port: rest.port, auth_type: rest.auth_type, clear_ssh: modal.editing ? true : undefined }
-
     if (modal.editing) {
-      updateMut.mutate({ id: modal.editing.id, data: payload })
+      updateMut.mutate({ id: modal.editing.id, data: form })
     } else {
-      createMut.mutate(payload)
+      createMut.mutate(form)
     }
   }
 
@@ -292,57 +340,18 @@ export default function Servers() {
             </div>
           )}
           {data?.items.map((s) => {
-            const tr = testResults[s.id]
             const ss = statusData[s.id]
             return (
               <div key={s.id} className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                {/* Card header */}
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
                   <Server className="h-5 w-5 text-indigo-400 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{s.name}</span>
-                      {s.has_ssh && (
-                        <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
-                          <ShieldCheck className="h-3 w-3" />
-                          リモート実行可能
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {s.host}:{s.port}
-                      {s.has_ssh && s.username && <> · {s.username} ·{' '}
-                        <span className="text-[10px] rounded px-1.5 py-0.5 bg-gray-100">{s.auth_type === 'key' ? '秘密鍵' : 'パスワード'}</span>
-                      </>}
-                    </div>
-                  </div>
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {s.has_ssh && (
-                      <>
-                        <button
-                          onClick={() => handleTest(s.id)}
-                          disabled={tr?.testing}
-                          className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {tr?.testing ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : tr?.ok ? <Wifi className="h-3 w-3 text-emerald-500" />
-                            : tr && !tr.ok ? <WifiOff className="h-3 w-3 text-red-500" />
-                            : <Wifi className="h-3 w-3 text-gray-400" />}
-                          {tr?.ok ? `${tr.latency_ms}ms` : tr?.error ? 'エラー' : '接続テスト'}
-                        </button>
-                        <button
-                          onClick={() => handleCheckNow(s.id)}
-                          disabled={ss?.loading}
-                          className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {ss?.loading
-                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <Activity className="h-3 w-3 text-gray-400" />}
-                          今すぐ確認
-                        </button>
-                      </>
+                    <span className="font-semibold text-gray-900">{s.name}</span>
+                    {s.host && (
+                      <div className="text-xs text-gray-400">{s.host}</div>
                     )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
                     <div className="w-px h-5 bg-gray-200" />
                     <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                       <Pencil className="h-4 w-4" />
@@ -356,23 +365,11 @@ export default function Servers() {
                   </div>
                 </div>
 
-                {/* Status body */}
                 <div className="px-5 py-4 bg-gray-50/50">
-                  {s.has_ssh && (
-                    <>
-                      {ss?.loading && !ss?.data ? (
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> 取得中…
-                        </div>
-                      ) : ss?.data ? (
-                        <StatusSummary status={ss.data} />
-                      ) : (
-                        <p className="text-xs text-gray-400">「今すぐ確認」を押すと状態が表示されます。</p>
-                      )}
-                    </>
-                  )}
-                  <ServerMonitorCharts serverId={s.id} />
+                  {ss?.data && <StatusSummary status={ss.data} />}
+                  <ServerWorkerChecks serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
+                  <WorkerCredentials server={s} />
                 </div>
               </div>
             )
@@ -383,82 +380,26 @@ export default function Servers() {
       {/* Server add/edit Modal */}
       {modal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
             <div className="border-b border-gray-100 px-6 py-4">
               <h2 className="font-semibold text-gray-900">
                 {modal.editing ? 'サーバ編集' : 'サーバ追加'}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="表示名 *">
-                  <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className="input" placeholder="本番サーバ" />
-                </Field>
-                <Field label="ホスト *">
-                  <input required value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
-                    className="input" placeholder="192.168.1.1" />
-                </Field>
-              </div>
-
-              {/* SSH設定トグル */}
-              <div className={`rounded-lg border p-4 transition-colors ${form.enable_ssh ? 'border-emerald-200 bg-emerald-50/50' : 'border-gray-200'}`}>
-                <label className="flex items-center gap-3 cursor-pointer mb-3">
-                  <input
-                    type="checkbox"
-                    checked={form.enable_ssh}
-                    onChange={e => setForm(f => ({ ...f, enable_ssh: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300 text-emerald-600"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                      SSH接続情報を設定する
-                    </span>
-                    <p className="text-xs text-gray-400 mt-0.5">設定するとリモート実行が有効になります</p>
-                  </div>
-                </label>
-
-                {form.enable_ssh && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="ポート">
-                        <input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: +e.target.value }))}
-                          className="input" />
-                      </Field>
-                      <Field label="ユーザー名 *">
-                        <input required={form.enable_ssh} value={form.username ?? ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                          className="input" placeholder="ubuntu" />
-                      </Field>
-                    </div>
-                    <Field label="認証方式">
-                      <select value={form.auth_type} onChange={e => setForm(f => ({ ...f, auth_type: e.target.value as 'password' | 'key' }))}
-                        className="input">
-                        <option value="password">パスワード</option>
-                        <option value="key">秘密鍵</option>
-                      </select>
-                    </Field>
-                    {form.auth_type === 'password' ? (
-                      <Field label="パスワード">
-                        <input type="password" value={form.password ?? ''} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                          className="input" placeholder="••••••••" />
-                      </Field>
-                    ) : (
-                      <>
-                        <Field label="秘密鍵 (PEM形式)">
-                          <textarea rows={5} value={form.private_key ?? ''} onChange={e => setForm(f => ({ ...f, private_key: e.target.value }))}
-                            className="input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
-                        </Field>
-                        <Field label="パスフレーズ (任意)">
-                          <input type="password" value={form.passphrase ?? ''} onChange={e => setForm(f => ({ ...f, passphrase: e.target.value }))}
-                            className="input" />
-                        </Field>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
+              <Field label="表示名 *">
+                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="input" placeholder="本番サーバ" />
+              </Field>
+              <Field label="ホスト名 / メモ (任意)">
+                <input value={form.host ?? ''} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
+                  className="input" placeholder="example.com" />
+              </Field>
+              {!modal.editing && (
+                <p className="text-xs text-gray-400">
+                  追加後にワーカートークンが表示されます。ops-worker の設定に使用してください。
+                </p>
+              )}
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>
                 <button type="submit" disabled={createMut.isPending || updateMut.isPending} className="btn-primary">
@@ -469,6 +410,62 @@ export default function Servers() {
           </div>
         </div>
       )}
+
+      {/* Worker token reveal Modal */}
+      {newServerToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-indigo-500" />
+              <h2 className="font-semibold text-gray-900">ワーカー接続情報</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                <span className="font-medium text-gray-800">{newServerToken.name}</span> のワーカートークンです。
+                ops-worker の設定ファイルに記入してください。
+              </p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                このトークンは今後表示されません。必ずコピーして保管してください。
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                <CredentialRow label="Worker ID" value={newServerToken.id} />
+                <CredentialRow label="Token" value={newServerToken.token} secret />
+                <CredentialRow label="Endpoint" value={`${window.location.origin}/api/v1`} />
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+              <button onClick={() => setNewServerToken(null)} className="btn-primary">
+                確認しました
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CredentialRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  const [revealed, setRevealed] = useState(!secret)
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-gray-500 text-xs w-20 shrink-0">{label}</span>
+      <code className={`flex-1 font-mono text-xs text-gray-800 break-all ${!revealed ? 'blur-sm select-none' : ''}`}>
+        {value}
+      </code>
+      {secret && (
+        <button onClick={() => setRevealed(r => !r)} className="text-xs text-indigo-600 hover:underline shrink-0">
+          {revealed ? '隠す' : '表示'}
+        </button>
+      )}
+      <button
+        onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 shrink-0"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   )
 }

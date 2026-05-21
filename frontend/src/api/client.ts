@@ -1,10 +1,11 @@
 import axios from 'axios'
 import type {
-  Server, ServerCreate, TestResult, ServerStatus, ServerJobResult,
+  Server, ServerCreate, ServerStatus, ServerJobResult,
   Job, JobCreate,
   Execution, ExecutionSummary,
   PagedResponse, AppSettings,
-  Monitor, MonitorCreate, MonitorDataPoint, MonitorLastLog, BuiltinMetricDef,
+  BuiltinMetricDef,
+  WorkerCheck,
   JobTemplate,
   Script, ScriptCreate,
 } from '../types'
@@ -13,7 +14,6 @@ const TOKEN_KEY = 'opsboard_token'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
-// リクエストに Bearer トークンを付与
 api.interceptors.request.use(config => {
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) {
@@ -22,7 +22,6 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// 401 レスポンスでトークンを破棄してログインページへリダイレクト
 api.interceptors.response.use(
   res => res,
   err => {
@@ -46,15 +45,6 @@ export const updateServer = (id: string, data: Partial<ServerCreate>) =>
 
 export const deleteServer = (id: string) =>
   api.delete(`/servers/${id}`)
-
-export const testServer = (id: string) =>
-  api.post<TestResult>(`/servers/${id}/test`).then(r => r.data)
-
-export const checkServerStatus = (id: string) =>
-  api.post<ServerStatus>(`/servers/${id}/status`).then(r => r.data)
-
-export const getServerStatus = (id: string) =>
-  api.get<ServerStatus>(`/servers/${id}/status`).then(r => r.data)
 
 export const getAllLatestStatuses = () =>
   api.get<ServerStatus[]>('/servers/statuses/latest').then(r => r.data)
@@ -118,32 +108,11 @@ export const getAppSettings = () =>
 export const updateAppSettings = (data: AppSettings) =>
   api.put<AppSettings>('/settings', data).then(r => r.data)
 
-// Monitors
-export const getMonitors = (serverId?: string) =>
-  api.get<Monitor[]>('/monitors', {
+// Worker Checks
+export const getWorkerChecks = (serverId?: string) =>
+  api.get<WorkerCheck[]>('/worker-checks', {
     params: serverId ? { server_id: serverId } : undefined,
   }).then(r => r.data)
-
-export const createMonitor = (data: MonitorCreate) =>
-  api.post<Monitor>('/monitors', data).then(r => r.data)
-
-export const updateMonitor = (id: string, data: Partial<MonitorCreate>) =>
-  api.put<Monitor>(`/monitors/${id}`, data).then(r => r.data)
-
-export const deleteMonitor = (id: string) =>
-  api.delete(`/monitors/${id}`)
-
-export const toggleMonitor = (id: string, enabled: boolean) =>
-  api.patch<Monitor>(`/monitors/${id}/enable`, null, { params: { enabled } }).then(r => r.data)
-
-export const triggerMonitor = (id: string) =>
-  api.post(`/monitors/${id}/trigger`).then(r => r.data)
-
-export const getMonitorData = (id: string, hours = 24, limit = 500) =>
-  api.get<MonitorDataPoint[]>(`/monitors/${id}/data`, { params: { hours, limit } }).then(r => r.data)
-
-export const getMonitorLastLog = (id: string) =>
-  api.get<MonitorLastLog>(`/monitors/${id}/last-log`).then(r => r.data)
 
 export const getBuiltinMetrics = () =>
   api.get<BuiltinMetricDef[]>('/monitors/builtin-metrics/list').then(r => r.data)
@@ -165,7 +134,7 @@ export const updateScript = (id: string, data: Partial<ScriptCreate>) =>
 export const deleteScript = (id: string) =>
   api.delete(`/scripts/${id}`)
 
-// Dashboard stats (derived from existing endpoints)
+// Dashboard stats
 export const getDashboardStats = async () => {
   const [jobs, executions] = await Promise.all([
     getJobs(),

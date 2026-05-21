@@ -222,7 +222,6 @@ async def collect_metric(
     if err:
         return None, err, ""
 
-    command = f"export SERVER_HOST={host!r}; " + command
     result = await run_command(
         host, port, username, command,
         password=password, private_key=private_key, passphrase=passphrase,

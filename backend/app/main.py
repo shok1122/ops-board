@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.scheduler import scheduler, reload_all_jobs, get_scheduler_status
-from app.routers import servers, jobs, executions, settings, config, monitors, job_templates, scripts
+from app.routers import servers, jobs, executions, settings, config, job_templates, scripts
+from app.routers.ingest import router as ingest_router
+from app.routers.worker_checks import router as worker_checks_router
 from app.routers.auth import router as auth_router, require_auth
 
 logging.basicConfig(level=logging.INFO)
@@ -68,6 +70,9 @@ app.add_middleware(
 # 認証ルーター（認証不要の公開エンドポイント）
 app.include_router(auth_router, prefix="/api/v1")
 
+# ops-worker ingest（認証はBearer tokenで自己処理）
+app.include_router(ingest_router, prefix="/api/v1")
+
 # 保護されたルーター（全エンドポイントに require_auth を適用）
 _auth = [Depends(require_auth)]
 app.include_router(servers.router, prefix="/api/v1", dependencies=_auth)
@@ -75,14 +80,33 @@ app.include_router(jobs.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(executions.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(settings.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(config.router, prefix="/api/v1", dependencies=_auth)
-app.include_router(monitors.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(job_templates.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts.router, prefix="/api/v1", dependencies=_auth)
+app.include_router(worker_checks_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/api/v1/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/v1/monitors/builtin-metrics/list", dependencies=_auth)
+async def list_builtin_metrics():
+    from app.builtin_monitors import BUILTIN_MONITOR_REGISTRY
+    result = []
+    for key, entry in BUILTIN_MONITOR_REGISTRY.items():
+        if entry.get("hidden"):
+            continue
+        result.append({
+            "key": key,
+            "label": entry.get("label", key),
+            "unit": entry.get("unit", ""),
+            "configurable": entry.get("configurable", False),
+            "config_fields": entry.get("config_fields", []),
+            "command_template": entry.get("command"),
+            "execution_type": entry.get("execution_type", "remote"),
+        })
+    return result
 
 
 @app.get("/api/v1/scheduler/status", dependencies=_auth)

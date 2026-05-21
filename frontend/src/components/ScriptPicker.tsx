@@ -4,22 +4,13 @@ import { Search, X, BookOpen, Lock } from 'lucide-react'
 import { getScripts, getBuiltinMetrics, getJobTemplates } from '../api/client'
 import type {
   Script, BuiltinMetricDef, JobTemplate,
-  UnifiedScript, JobTemplateConfigField, ExecutionType,
+  UnifiedScript, JobTemplateConfigField,
 } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
   system: 'システム', network: 'ネットワーク', process: 'プロセス', log: 'ログ', example: 'サンプル',
-}
-
-const EXEC_BADGE: Record<ExecutionType, { label: string; cls: string }> = {
-  local:  { label: 'ローカル実行', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
-  remote: { label: 'リモート実行', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-}
-
-function contentExecutionType(content: string): ExecutionType {
-  return content.includes('# @run_locally') ? 'local' : 'remote'
 }
 
 function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
@@ -31,7 +22,6 @@ function builtinToUnified(b: BuiltinMetricDef): UnifiedScript {
     content: b.command_template ?? '# TLS直接接続（コマンドなし）',
     source: 'builtin_metric',
     readonly: true,
-    execution_type: b.execution_type ?? 'remote',
     builtinKey: b.key,
     unit: b.unit,
     configFields: b.config_fields,
@@ -47,7 +37,6 @@ function templateToUnified(t: JobTemplate): UnifiedScript {
     content: t.script,
     source: 'job_template',
     readonly: true,
-    execution_type: contentExecutionType(t.script),
     category: t.category,
     defaultCron: t.default_cron,
     defaultTimeout: t.default_timeout,
@@ -60,7 +49,6 @@ function userToUnified(s: Script): UnifiedScript {
     id: s.id, name: s.name, description: s.description,
     language: s.language, content: s.content,
     source: 'user', readonly: false,
-    execution_type: contentExecutionType(s.content),
   }
 }
 
@@ -196,7 +184,6 @@ export function ScriptPickerModal({
                   <ul className="divide-y divide-gray-50">
                     {g.items.map(s => {
                       const badge = SOURCE_BADGE[s.source]
-                      const execBadge = EXEC_BADGE[s.execution_type]
                       return (
                         <li key={s.id}>
                           <button
@@ -207,9 +194,6 @@ export function ScriptPickerModal({
                             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                               <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${badge.cls}`}>
                                 {badge.label}
-                              </span>
-                              <span className={`text-[10px] font-medium px-1.5 py-0 rounded border ${execBadge.cls}`}>
-                                {execBadge.label}
                               </span>
                               {s.readonly && <Lock className="h-2.5 w-2.5 text-gray-400" />}
                               <span className="text-sm font-medium text-gray-800 truncate">{s.name}</span>
@@ -235,14 +219,6 @@ export function ScriptPickerModal({
                   <p className="text-sm font-medium text-gray-800">{selected.name}</p>
                   {selected.description && <p className="text-xs text-gray-400">{selected.description}</p>}
                   <div className="flex items-center gap-1.5">
-                    {(() => {
-                      const eb = EXEC_BADGE[selected.execution_type]
-                      return (
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${eb.cls}`}>
-                          {eb.label}
-                        </span>
-                      )
-                    })()}
                     {selected.unit && (
                       <span className="text-xs text-gray-500">単位: <span className="font-medium">{selected.unit}</span></span>
                     )}
