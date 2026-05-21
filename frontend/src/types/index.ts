@@ -9,7 +9,8 @@ export interface Server {
 
 export interface ServerCreate {
   name: string
-  host?: string
+  host: string
+  generate_worker_token?: boolean
 }
 
 export interface ServerStatus {

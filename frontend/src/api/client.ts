@@ -39,7 +39,7 @@ export const getServers = () =>
 export const createServer = (data: ServerCreate) =>
   api.post<Server>('/servers', data).then(r => r.data)
 
-export const updateServer = (id: string, data: Partial<ServerCreate>) =>
+export const updateServer = (id: string, data: Partial<ServerCreate> & { regenerate_token?: boolean }) =>
   api.put<Server>(`/servers/${id}`, data).then(r => r.data)
 
 export const deleteServer = (id: string) =>

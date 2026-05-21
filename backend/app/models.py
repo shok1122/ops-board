@@ -7,12 +7,14 @@ from pydantic import BaseModel, Field
 
 class ServerCreate(BaseModel):
     name: str
-    host: Optional[str] = None
+    host: str
+    generate_worker_token: bool = True
 
 
 class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
+    regenerate_token: bool = False
 
 
 class ServerOut(BaseModel):

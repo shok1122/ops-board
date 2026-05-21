@@ -34,13 +34,13 @@ async def list_servers():
 async def create_server(body: ServerCreate):
     now = now_iso()
     sid = new_id()
-    worker_token = secrets.token_urlsafe(32)
+    worker_token = secrets.token_urlsafe(32) if body.generate_worker_token else None
     async with get_db() as db:
         await db.execute(
             "INSERT INTO servers (id, name, host, port, username, auth_type, "
             "server_type, worker_token, created_at, updated_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (sid, body.name, body.host or "", 443, "", "password", "ops_worker", worker_token, now, now),
+            (sid, body.name, body.host, 443, "", "password", "ops_worker", worker_token, now, now),
         )
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (sid,))
@@ -70,6 +70,8 @@ async def update_server(server_id: str, body: ServerUpdate):
             updates["name"] = body.name
         if body.host is not None:
             updates["host"] = body.host
+        if body.regenerate_token:
+            updates["worker_token"] = secrets.token_urlsafe(32)
         updates["updated_at"] = now_iso()
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -80,7 +82,7 @@ async def update_server(server_id: str, body: ServerUpdate):
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (server_id,))
         row = await cur.fetchone()
-    return _row_to_out(row)
+    return _row_to_out(row, show_token=body.regenerate_token)
 
 
 @router.delete("/{server_id}", status_code=204)

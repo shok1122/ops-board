@@ -13,7 +13,7 @@ import {
 import type { Server as ServerType, ServerCreate, ServerStatus, WorkerCheck } from '../types'
 import { JobResultCard } from '../components/JobResultView'
 
-const emptyForm: ServerCreate = { name: '', host: '' }
+const emptyForm: ServerCreate = { name: '', host: '', generate_worker_token: true }
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -286,7 +286,7 @@ function WorkerCredentials({ server }: { server: ServerType }) {
             <code className="flex-1 font-mono text-gray-800 text-[10px]">{window.location.origin}/api/v1</code>
             <CopyButton text={`${window.location.origin}/api/v1`} />
           </div>
-          <p className="text-gray-400 text-[10px] pt-1">トークンはサーバ登録時に一度だけ表示されます。</p>
+          <p className="text-gray-400 text-[10px] pt-1">トークンを再生成するにはサーバ編集から行えます。</p>
         </div>
       )}
     </div>
@@ -298,6 +298,7 @@ export default function Servers() {
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
   const [form, setForm] = useState<ServerCreate>(emptyForm)
+  const [regenOnEdit, setRegenOnEdit] = useState(false)
   const [newServerToken, setNewServerToken] = useState<{ id: string; name: string; token: string } | null>(null)
   const [statusData, setStatusData] = useState<Record<string, { data?: ServerStatus }>>({})
   const { data: latestStatuses } = useQuery({
@@ -328,8 +329,14 @@ export default function Servers() {
     },
   })
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ServerCreate> }) => updateServer(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['servers'] }); closeModal() },
+    mutationFn: ({ id, data }: { id: string; data: Partial<ServerCreate> & { regenerate_token?: boolean } }) => updateServer(id, data),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ['servers'] })
+      closeModal()
+      if (updated.worker_token) {
+        setNewServerToken({ id: updated.id, name: updated.name, token: updated.worker_token })
+      }
+    },
   })
   const deleteMut = useMutation({
     mutationFn: deleteServer,
@@ -339,6 +346,7 @@ export default function Servers() {
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
     setForm({ name: s.name, host: s.host })
+    setRegenOnEdit(false)
     setModal({ open: true, editing: s })
   }
   const closeModal = () => setModal({ open: false })
@@ -346,7 +354,7 @@ export default function Servers() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (modal.editing) {
-      updateMut.mutate({ id: modal.editing.id, data: form })
+      updateMut.mutate({ id: modal.editing.id, data: { ...form, regenerate_token: regenOnEdit } })
     } else {
       createMut.mutate(form)
     }
@@ -425,14 +433,30 @@ export default function Servers() {
                 <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="input" placeholder="本番サーバ" />
               </Field>
-              <Field label="ホスト名 / メモ (任意)">
-                <input value={form.host ?? ''} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
+              <Field label="ホスト名 *">
+                <input required value={form.host ?? ''} onChange={e => setForm(f => ({ ...f, host: e.target.value }))}
                   className="input" placeholder="example.com" />
               </Field>
-              {!modal.editing && (
-                <p className="text-xs text-gray-400">
-                  追加後にワーカートークンが表示されます。ops-worker の設定に使用してください。
-                </p>
+              {!modal.editing ? (
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.generate_worker_token ?? true}
+                    onChange={e => setForm(f => ({ ...f, generate_worker_token: e.target.checked }))}
+                    className="rounded border-gray-300 text-indigo-600"
+                  />
+                  ワーカートークンを生成する
+                </label>
+              ) : (
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={regenOnEdit}
+                    onChange={e => setRegenOnEdit(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600"
+                  />
+                  ワーカートークンを再生成する
+                </label>
               )}
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>
