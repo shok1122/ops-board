@@ -2,6 +2,7 @@ export interface Server {
   id: string
   name: string
   host: string
+  has_worker_token: boolean
   worker_token?: string
   created_at: string
   updated_at: string

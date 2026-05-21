@@ -21,6 +21,7 @@ class ServerOut(BaseModel):
     id: str
     name: str
     host: str
+    has_worker_token: bool = False
     worker_token: Optional[str] = None
     created_at: str
     updated_at: str

@@ -411,7 +411,7 @@ export default function Servers() {
                   {ss?.data && <StatusSummary status={ss.data} />}
                   <ServerWorkerChecks serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
-                  <WorkerCredentials server={s} />
+                  {s.has_worker_token && <WorkerCredentials server={s} />}
                 </div>
               </div>
             )

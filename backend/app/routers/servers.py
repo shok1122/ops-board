@@ -15,6 +15,7 @@ def _row_to_out(row, show_token: bool = False) -> ServerOut:
         id=row["id"],
         name=row["name"],
         host=row["host"] or "",
+        has_worker_token=bool(row["worker_token"]),
         worker_token=row["worker_token"] if show_token else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
