@@ -264,30 +264,23 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function WorkerCredentials({ server }: { server: ServerType }) {
-  const [show, setShow] = useState(false)
   return (
     <div className="mt-3">
-      <button
-        onClick={() => setShow(s => !s)}
-        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
-      >
+      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
         <KeyRound className="h-3.5 w-3.5" />
-        ワーカー接続情報 {show ? '▲' : '▼'}
-      </button>
-      {show && (
-        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-1.5">
+        ワーカー接続情報
+      </div>
+      {server.has_worker_token ? (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-gray-500 w-14 shrink-0">Worker ID</span>
             <code className="flex-1 font-mono text-gray-800 truncate">{server.id}</code>
             <CopyButton text={server.id} />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 w-14 shrink-0">Endpoint</span>
-            <code className="flex-1 font-mono text-gray-800 text-[10px]">{window.location.origin}/api/v1</code>
-            <CopyButton text={`${window.location.origin}/api/v1`} />
-          </div>
           <p className="text-gray-400 text-[10px] pt-1">トークンを再生成するにはサーバ編集から行えます。</p>
         </div>
+      ) : (
+        <p className="text-xs text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
       )}
     </div>
   )
@@ -411,7 +404,7 @@ export default function Servers() {
                   {ss?.data && <StatusSummary status={ss.data} />}
                   <ServerWorkerChecks serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
-                  {s.has_worker_token && <WorkerCredentials server={s} />}
+                  <WorkerCredentials server={s} />
                 </div>
               </div>
             )

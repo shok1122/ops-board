@@ -1,6 +1,7 @@
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, XCircle, Loader2, Calendar, TrendingUp } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Calendar, TrendingUp, Plug, Copy, Check } from 'lucide-react'
+import { useState } from 'react'
 import { getDashboardStats, getServers, getServerJobResults } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import { JobResultCard } from '../components/JobResultView'
@@ -66,6 +67,52 @@ function AlertJobResults() {
   )
 }
 
+const WORKER_ENDPOINTS = [
+  { method: 'POST', path: '/health', desc: 'エージェント起動・稼働状況の定期送信' },
+  { method: 'POST', path: '/report', desc: '監視チェック結果の送信' },
+]
+
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+function WorkerEndpoints() {
+  const base = `${window.location.origin}/api/v1`
+  return (
+    <div className="mb-8">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">ワーカー接続先</h2>
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
+          <Plug className="h-4 w-4 text-indigo-400" />
+          <span className="text-xs text-gray-500">Base URL</span>
+          <code className="text-xs font-mono text-gray-800 flex-1">{base}</code>
+          <CopyBtn text={base} />
+        </div>
+        <div className="divide-y divide-gray-50">
+          {WORKER_ENDPOINTS.map(ep => (
+            <div key={ep.path} className="flex items-center gap-3 px-5 py-3">
+              <span className="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 w-10 text-center">
+                {ep.method}
+              </span>
+              <code className="text-xs font-mono text-gray-700 shrink-0">{ep.path}</code>
+              <span className="text-xs text-gray-400 flex-1">{ep.desc}</span>
+              <CopyBtn text={`${base}${ep.path}`} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -119,6 +166,8 @@ export default function Dashboard() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">ダッシュボード</h1>
+
+      <WorkerEndpoints />
 
       <AlertJobResults />
 
