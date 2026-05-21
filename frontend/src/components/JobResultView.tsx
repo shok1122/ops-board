@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { JobResultOutput, ServerJobResult } from '../types'
+import { formatDistanceToNow } from 'date-fns'
+import { ja } from 'date-fns/locale'
 
 const STATUS_COLORS = {
   ok:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400' },
@@ -38,8 +40,8 @@ export function JobResultCard({ result }: { result: ServerJobResult }) {
       {/* タイムスタンプ・ジョブ名リンク */}
       <div className="flex items-center justify-between gap-2">
         {result.finished_at && (
-          <span className="text-[10px] text-gray-400">
-            {new Date(result.finished_at).toLocaleString('ja-JP')}
+          <span className="text-[10px] text-gray-400" title={new Date(result.finished_at).toLocaleString('ja-JP')}>
+            {formatDistanceToNow(new Date(result.finished_at), { addSuffix: true, locale: ja })}
           </span>
         )}
         <span className="text-[10px] text-gray-400">

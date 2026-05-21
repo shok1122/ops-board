@@ -12,6 +12,8 @@ import {
 } from '../api/client'
 import type { Server as ServerType, ServerCreate, ServerStatus, WorkerCheck } from '../types'
 import { JobResultCard } from '../components/JobResultView'
+import { formatDistanceToNow } from 'date-fns'
+import { ja } from 'date-fns/locale'
 
 const emptyForm: ServerCreate = { name: '', host: '', generate_worker_token: true }
 
@@ -138,8 +140,8 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
 
       {/* Header */}
       <div className="px-3 pt-2.5 pb-2">
-        <div className="text-[10px] text-gray-400 mb-1.5">
-          {new Date(c.reported_at).toLocaleString('ja-JP')}
+        <div className="text-[10px] text-gray-400 mb-1.5" title={new Date(c.reported_at).toLocaleString('ja-JP')}>
+          {formatDistanceToNow(new Date(c.reported_at), { addSuffix: true, locale: ja })}
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">

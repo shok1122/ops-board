@@ -70,7 +70,10 @@ function CheckCard({ check }: { check: WorkerCheck }) {
         </div>
       )}
 
-      <div className="flex items-center gap-1 text-xs text-gray-400 mt-auto pt-1">
+      <div
+        className="flex items-center gap-1 text-xs text-gray-400 mt-auto pt-1 cursor-default"
+        title={check.reported_at}
+      >
         <Clock className="h-3 w-3" />
         {ago}
       </div>
