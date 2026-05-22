@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production-32bytes!!"
     scripts_dir: str = "/data/scripts"
 
+    server_status_retention_days: int = 7
+
     # Authentication settings
     # AUTH_PASSWORD が空の場合は認証無効
     auth_password: str = ""

@@ -291,6 +291,17 @@ async def _cleanup_stale_executions():
             logger.error("Error cleaning up stale execution %s: %s", row["id"], exc)
 
 
+async def _cleanup_old_server_status():
+    from app.config import settings
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=settings.server_status_retention_days)).isoformat()
+    async with get_db() as db:
+        cur = await db.execute("DELETE FROM server_status WHERE checked_at < ?", (cutoff,))
+        await db.commit()
+        if cur.rowcount:
+            logger.info("Deleted %d old server_status rows (older than %d days)", cur.rowcount, settings.server_status_retention_days)
+
+
 async def reload_all_jobs():
     """Remove all scheduled jobs and re-register from DB."""
     for job in scheduler.get_jobs():
@@ -304,12 +315,20 @@ async def reload_all_jobs():
         schedule_job(row["id"], row["cron_expr"])
 
     from apscheduler.triggers.interval import IntervalTrigger
+    from apscheduler.triggers.cron import CronTrigger
     scheduler.add_job(
         _cleanup_stale_executions,
         trigger=IntervalTrigger(seconds=30),
         id="_cleanup_stale_executions",
         replace_existing=True,
         misfire_grace_time=10,
+    )
+    scheduler.add_job(
+        _cleanup_old_server_status,
+        trigger=CronTrigger(hour=3, minute=0),
+        id="_cleanup_old_server_status",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
 
     logger.info("Reloaded %d jobs from DB", len(rows))
