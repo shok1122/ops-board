@@ -40,11 +40,11 @@ export function JobResultCard({ result }: { result: ServerJobResult }) {
       {/* タイムスタンプ・ジョブ名リンク */}
       <div className="flex items-center justify-between gap-2">
         {result.finished_at && (
-          <span className="text-[10px] text-gray-400" title={new Date(result.finished_at).toLocaleString('ja-JP')}>
+          <span className="text-xs text-gray-400" title={new Date(result.finished_at).toLocaleString('ja-JP')}>
             {formatDistanceToNow(new Date(result.finished_at), { addSuffix: true, locale: ja })}
           </span>
         )}
-        <span className="text-[10px] text-gray-400">
+        <span className="text-xs text-gray-400">
           Job Name: <Link to={`/jobs/${result.job_id}`} className="text-indigo-600 hover:underline">{result.job_name}</Link>
         </span>
       </div>
@@ -62,7 +62,7 @@ export function JobResultCard({ result }: { result: ServerJobResult }) {
       {result.output ? (
         <JobResultView output={result.output} hideTitle />
       ) : result.raw_stdout ? (
-        <pre className="text-[10px] text-gray-500 bg-gray-50 rounded p-2 max-h-20 overflow-auto whitespace-pre-wrap">
+        <pre className="text-xs text-gray-500 bg-gray-50 rounded p-2 max-h-20 overflow-auto whitespace-pre-wrap">
           {result.raw_stdout.trim()}
         </pre>
       ) : null}

@@ -84,8 +84,8 @@ function MiniChart({
 function StatusSummary({ status }: { status: ServerStatus }) {
   if (status.error) {
     return (
-      <div className="flex items-center gap-2 text-red-600 text-xs py-2 px-3 bg-red-50 rounded-lg">
-        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+      <div className="flex items-center gap-2 text-red-600 text-sm py-2 px-3 bg-red-50 rounded-lg">
+        <AlertCircle className="h-4 w-4 shrink-0" />
         <span>{status.error}</span>
       </div>
     )
@@ -98,7 +98,7 @@ function StatusSummary({ status }: { status: ServerStatus }) {
   ].filter(Boolean).join(' / ')
 
   return (
-    <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+    <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
       {status.hostname && <span className="text-gray-500 w-full font-medium">{status.hostname}</span>}
       {status.os_info && <span className="text-gray-400 w-full">{status.os_info}</span>}
       {agentLabel && <Chip label="Agent" value={agentLabel} />}
@@ -133,19 +133,19 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
 
       {/* Header */}
       <div className="px-3 pt-2.5 pb-2">
-        <div className="text-[10px] text-gray-400 mb-1.5" title={new Date(c.reported_at).toLocaleString('ja-JP')}>
+        <div className="text-sm text-gray-400 mb-1.5" title={new Date(c.reported_at).toLocaleString('ja-JP')}>
           {formatDistanceToNow(new Date(c.reported_at), { addSuffix: true, locale: ja })}
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <span className="font-semibold text-gray-900 text-xs leading-snug">{c.check_name}</span>
+            <span className="font-semibold text-gray-900 text-base leading-snug">{c.check_name}</span>
             {c.check_type && (
-              <span className="ml-1.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 align-middle">
+              <span className="ml-1.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-500 align-middle">
                 {c.check_type}
               </span>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge}`}>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-medium ${statusBadge}`}>
             {c.status}
           </span>
         </div>
@@ -153,7 +153,7 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
 
       {/* Message */}
       {c.message && (
-        <div className={`mx-3 mb-2 border-l-2 pl-2 pr-2 py-1 rounded-r-md text-xs ${messageBorder}`}>
+        <div className={`mx-3 mb-2 border-l-2 pl-2 pr-2 py-1 rounded-r-md text-base ${messageBorder}`}>
           {c.message}
         </div>
       )}
@@ -163,10 +163,10 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
         <div className="px-3 pb-2 grid grid-cols-2 gap-1.5">
           {c.metrics.map((m, i) => (
             <div key={i} className="rounded-lg bg-gray-50 px-2.5 py-1.5">
-              <div className="text-[10px] text-gray-400 truncate mb-0.5">{m.name}</div>
-              <div className="text-sm font-semibold text-gray-800 tabular-nums leading-none">
+              <div className="text-sm text-gray-400 truncate mb-0.5">{m.name}</div>
+              <div className="text-lg font-semibold text-gray-800 tabular-nums leading-none">
                 {Number.isInteger(m.value) ? m.value : m.value.toFixed(2)}
-                <span className="text-xs font-normal text-gray-400 ml-0.5">{m.unit}</span>
+                <span className="text-base font-normal text-gray-400 ml-0.5">{m.unit}</span>
               </div>
             </div>
           ))}
@@ -177,7 +177,7 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
       {labelEntries.length > 0 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1">
           {labelEntries.map(([k, v]) => (
-            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 ring-1 ring-gray-200">
+            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-sm text-gray-600 ring-1 ring-gray-200">
               <span className="text-gray-400">{k}</span>
               <span className="text-gray-300">·</span>
               <span>{v}</span>
@@ -188,8 +188,8 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
 
       {/* Error */}
       {c.error && (
-        <div className="mx-3 mb-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-700 ring-1 ring-red-200">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+        <div className="mx-3 mb-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-base text-red-700 ring-1 ring-red-200">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <span>{c.error}</span>
         </div>
       )}
@@ -208,7 +208,7 @@ function ServerWorkerChecks({ serverId }: { serverId: string }) {
 
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-gray-500 mb-2">リモート実行結果</p>
+      <p className="text-sm font-medium text-gray-500 mb-2">リモート実行結果</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} />)}
       </div>
@@ -225,7 +225,7 @@ function ServerJobResults({ serverId }: { serverId: string }) {
   if (!data || data.length === 0) return null
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-gray-500 mb-2">ジョブ実行結果</p>
+      <p className="text-sm font-medium text-gray-500 mb-2">ジョブ実行結果</p>
       <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
         {data.map(r => (
           <div key={r.job_id} className="break-inside-avoid mb-2">
@@ -253,7 +253,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
       className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
     </button>
   )
 }
@@ -261,21 +261,21 @@ function CopyButton({ text }: { text: string }) {
 function WorkerCredentials({ server }: { server: ServerType }) {
   return (
     <div className="mt-3">
-      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
-        <KeyRound className="h-3.5 w-3.5" />
+      <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1.5">
+        <KeyRound className="h-4 w-4" />
         ワーカー接続情報
       </div>
       {server.has_worker_token ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-1.5">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-gray-500 w-14 shrink-0">Worker ID</span>
             <code className="flex-1 font-mono text-gray-800 truncate">{server.id}</code>
             <CopyButton text={server.id} />
           </div>
-          <p className="text-gray-400 text-[10px] pt-1">トークンを再生成するにはサーバ編集から行えます。</p>
+          <p className="text-gray-400 text-xs pt-1">トークンを再生成するにはサーバ編集から行えます。</p>
         </div>
       ) : (
-        <p className="text-xs text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
+        <p className="text-sm text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
       )}
     </div>
   )
@@ -517,7 +517,7 @@ function CredentialRow({ label, value, secret }: { label: string; value: string;
         onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
         className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 shrink-0"
       >
-        {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
       </button>
     </div>
   )
