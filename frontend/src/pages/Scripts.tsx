@@ -6,8 +6,20 @@ import type { Script, ScriptCreate, UnifiedScript, JobTemplate } from '../types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const PLACEHOLDER = '#!/bin/bash\n# スクリプトの内容を入力してください\necho "Hello"'
-const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: '' }
+const DEFAULT_CONTENT = `#!/bin/bash
+# @name スクリプト名
+# @description スクリプトの説明（OpsBoard上で実行されます）
+# @run_locally
+# @category network
+# @default_cron */5 * * * *
+# @default_timeout 30
+
+# 出力形式: JSON 1行
+# {"title":"...", "status":"ok|warn|error", "value":数値, "unit":"単位", "message":"メッセージ"}
+
+echo '{"title":"サンプル","status":"ok","value":1,"unit":"","message":"正常"}'
+`
+const EMPTY_FORM: ScriptCreate = { name: '', description: '', language: 'bash', content: DEFAULT_CONTENT }
 
 /** ジョブテンプレートを UnifiedScript に変換 */
 function templateToUnified(t: JobTemplate): UnifiedScript {
@@ -117,48 +129,6 @@ function ScriptCard({
   )
 }
 
-// ── Starter templates ─────────────────────────────────────────────────────────
-
-type StarterTemplate = { id: string; label: string; hint: string; content: string }
-
-const STARTER_TEMPLATES: StarterTemplate[] = [
-  {
-    id: 'job-remote',
-    label: 'ジョブ（リモート）',
-    hint: 'SSHでサーバ上で実行するジョブスクリプト',
-    content: `#!/bin/bash
-# @name スクリプト名
-# @description スクリプトの説明
-# @category system
-# @default_cron */5 * * * *
-# @default_timeout 30
-
-# 出力形式: JSON 1行
-# {"title":"...", "status":"ok|warn|error", "value":数値, "unit":"単位", "message":"メッセージ"}
-
-echo '{"title":"サンプル","status":"ok","value":1,"unit":"","message":"正常"}'
-`,
-  },
-  {
-    id: 'job-local',
-    label: 'ジョブ（ローカル）',
-    hint: 'OpsBoard上で実行するジョブスクリプト（@run_locally）',
-    content: `#!/bin/bash
-# @name スクリプト名
-# @description スクリプトの説明（OpsBoard上で実行されます）
-# @run_locally
-# @category network
-# @default_cron */5 * * * *
-# @default_timeout 30
-
-# 出力形式: JSON 1行
-# {"title":"...", "status":"ok|warn|error", "value":数値, "unit":"単位", "message":"メッセージ"}
-
-echo '{"title":"サンプル","status":"ok","value":1,"unit":"","message":"正常"}'
-`,
-  },
-]
-
 // ── ScriptModal ───────────────────────────────────────────────────────────────
 
 function ScriptModal({
@@ -176,15 +146,9 @@ function ScriptModal({
       : EMPTY_FORM
   )
   const [saving, setSaving] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
 
   const setField = <K extends keyof ScriptCreate>(k: K, v: ScriptCreate[K]) =>
     setForm(f => ({ ...f, [k]: v }))
-
-  const applyTemplate = (t: StarterTemplate) => {
-    setSelectedTemplate(t.id)
-    setForm(f => ({ ...f, content: t.content }))
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,28 +165,6 @@ function ScriptModal({
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-            {!initial && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">テンプレート</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {STARTER_TEMPLATES.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => applyTemplate(t)}
-                      className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
-                        selectedTemplate === t.id
-                          ? 'border-indigo-400 bg-indigo-50'
-                          : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <p className="text-xs font-medium text-gray-800">{t.label}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{t.hint}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">名前 *</label>
               <input required className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -237,7 +179,7 @@ function ScriptModal({
               <label className="block text-xs font-medium text-gray-700 mb-1">スクリプト内容 *</label>
               <textarea required rows={14}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
-                placeholder={PLACEHOLDER}
+
                 value={form.content} onChange={e => setField('content', e.target.value)} />
             </div>
           </div>
