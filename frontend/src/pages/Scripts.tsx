@@ -171,11 +171,6 @@ function ScriptModal({
                 value={form.name} onChange={e => setField('name', e.target.value)} placeholder="ディスク使用量チェック" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">説明</label>
-              <input className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.description ?? ''} onChange={e => setField('description', e.target.value)} placeholder="スクリプトの用途" />
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">スクリプト内容 *</label>
               <textarea required rows={14}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"

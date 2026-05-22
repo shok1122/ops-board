@@ -87,15 +87,6 @@ CREATE TABLE IF NOT EXISTS worker_checks (
     UNIQUE(server_id, check_name)
 );
 
-CREATE TABLE IF NOT EXISTS scripts (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    language TEXT NOT NULL DEFAULT 'bash',
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
 """
 
 
@@ -111,12 +102,6 @@ async def init_db():
             await db.execute(
                 "ALTER TABLE servers ADD COLUMN server_type TEXT NOT NULL DEFAULT 'ssh'"
             )
-            await db.commit()
-        # マイグレーション: scripts テーブルに file_path カラムが存在しない場合は追加
-        cur = await db.execute("PRAGMA table_info(scripts)")
-        script_cols = [row[1] for row in await cur.fetchall()]
-        if "file_path" not in script_cols:
-            await db.execute("ALTER TABLE scripts ADD COLUMN file_path TEXT")
             await db.commit()
         # マイグレーション: jobs に execution_type カラム追加
         cur = await db.execute("PRAGMA table_info(jobs)")
