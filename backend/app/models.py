@@ -45,12 +45,6 @@ class ServerStatusOut(BaseModel):
     hostname: Optional[str] = None
 
 
-# ── Settings ─────────────────────────────────────────────────────────────────
-
-class AppSettings(BaseModel):
-    status_check_interval_minutes: int = Field(default=10, ge=0, le=1440)
-
-
 # ── Jobs ─────────────────────────────────────────────────────────────────────
 
 class JobCreate(BaseModel):

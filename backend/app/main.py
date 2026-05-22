@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.scheduler import scheduler, reload_all_jobs, get_scheduler_status
-from app.routers import servers, jobs, executions, settings, config, job_templates, scripts
+from app.routers import servers, jobs, executions, config, job_templates, scripts
 from app.routers.ingest import router as ingest_router
 from app.routers.worker_checks import router as worker_checks_router
 from app.routers.auth import router as auth_router, require_auth
@@ -78,7 +78,6 @@ _auth = [Depends(require_auth)]
 app.include_router(servers.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(jobs.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(executions.router, prefix="/api/v1", dependencies=_auth)
-app.include_router(settings.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(config.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(job_templates.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts.router, prefix="/api/v1", dependencies=_auth)

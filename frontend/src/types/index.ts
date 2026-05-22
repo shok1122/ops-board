@@ -97,10 +97,6 @@ export interface PagedResponse<T> {
   total: number
 }
 
-export interface AppSettings {
-  status_check_interval_minutes: number
-}
-
 export interface JobResultItem {
   label: string
   value: string | number

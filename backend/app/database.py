@@ -72,13 +72,6 @@ CREATE TABLE IF NOT EXISTS server_status (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS app_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-
-INSERT OR IGNORE INTO app_settings (key, value) VALUES ('status_check_interval_minutes', '10');
-
 CREATE TABLE IF NOT EXISTS worker_checks (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

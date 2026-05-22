@@ -3,7 +3,7 @@ import type {
   Server, ServerCreate, ServerStatus, ServerJobResult,
   Job, JobCreate,
   Execution, ExecutionSummary,
-  PagedResponse, AppSettings,
+  PagedResponse,
   WorkerCheck,
   JobTemplate,
   Script, ScriptCreate,
@@ -99,13 +99,6 @@ export const exportConfig = () =>
 
 export const importConfig = (data: unknown) =>
   api.post('/config/import', data).then(r => r.data)
-
-// Settings
-export const getAppSettings = () =>
-  api.get<AppSettings>('/settings').then(r => r.data)
-
-export const updateAppSettings = (data: AppSettings) =>
-  api.put<AppSettings>('/settings', data).then(r => r.data)
 
 // Worker Checks
 export const getWorkerChecks = (serverId?: string) =>
