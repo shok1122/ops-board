@@ -231,19 +231,8 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
   )
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
-    >
-      {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-    </button>
-  )
-}
 
-function WorkerCredentials({ server }: { server: ServerType }) {
+function WorkerCredentials({ server, status }: { server: ServerType; status?: ServerStatus }) {
   return (
     <div className="mt-3">
       <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-1.5">
@@ -251,14 +240,15 @@ function WorkerCredentials({ server }: { server: ServerType }) {
         ワーカー接続情報
       </div>
       {server.has_worker_token ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1.5">
-          <div className="flex items-center gap-2">
+        <>
+          <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-500 w-14 shrink-0">Worker ID</span>
             <code className="flex-1 font-mono text-gray-800 truncate">{server.id}</code>
-            <CopyButton text={server.id} />
           </div>
-          <p className="text-gray-400 text-xs pt-1">トークンを再生成するにはサーバ編集から行えます。</p>
-        </div>
+          <p className="text-gray-400 text-xs pt-1 mb-2">トークンを再生成するにはサーバ編集から行えます。</p>
+          {status && <StatusSummary status={status} />}
+          <WorkerReports serverId={server.id} />
+        </>
       ) : (
         <p className="text-sm text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
       )}
@@ -410,10 +400,8 @@ export default function Servers() {
                 </div>
 
                 <div className="px-5 py-4 bg-gray-50/50">
-                  <WorkerCredentials server={s} />
-                  <WorkerReports serverId={s.id} />
+                  <WorkerCredentials server={s} status={ss?.data} />
                   <ServerJobResults serverId={s.id} />
-                  {ss?.data && <StatusSummary status={ss.data} />}
                 </div>
               </div>
             )
