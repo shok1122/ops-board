@@ -233,20 +233,30 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
 
 
 function WorkerCredentials({ server, status }: { server: ServerType; status?: ServerStatus }) {
+  const [copied, setCopied] = useState(false)
+  const copyId = () => {
+    navigator.clipboard.writeText(server.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
     <div className="mt-3">
-      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-1.5">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-2">
         <KeyRound className="h-4 w-4" />
         ワーカー接続情報
       </div>
       {server.has_worker_token ? (
         <>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-500 w-14 shrink-0">Worker ID</span>
-            <code className="flex-1 font-mono text-gray-800 truncate">{server.id}</code>
-          </div>
-          <p className="text-gray-400 text-xs pt-1 mb-2">トークンを再生成するにはサーバ編集から行えます。</p>
           {status && <StatusSummary status={status} />}
+          <button
+            onClick={copyId}
+            className="mt-2 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            title="Worker IDをコピー"
+          >
+            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+            <code className="font-mono">{server.id.slice(0, 8)}…</code>
+          </button>
           <WorkerReports serverId={server.id} />
         </>
       ) : (
