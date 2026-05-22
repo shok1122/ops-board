@@ -2,7 +2,6 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.database import get_db, new_id, now_iso
-from app.crypto import encrypt, decrypt
 from app.scheduler import reload_all_jobs, unschedule_job
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -12,12 +11,6 @@ class ServerExport(BaseModel):
     id: str
     name: str
     host: str
-    port: int
-    username: str
-    auth_type: str
-    password: Optional[str] = None
-    private_key: Optional[str] = None
-    passphrase: Optional[str] = None
 
 
 class JobExport(BaseModel):
@@ -48,17 +41,7 @@ async def export_config():
         job_rows = await cur.fetchall()
 
     servers = [
-        ServerExport(
-            id=r["id"],
-            name=r["name"],
-            host=r["host"],
-            port=r["port"],
-            username=r["username"],
-            auth_type=r["auth_type"],
-            password=decrypt(r["password_enc"]) if r["password_enc"] else None,
-            private_key=decrypt(r["private_key_enc"]) if r["private_key_enc"] else None,
-            passphrase=decrypt(r["passphrase_enc"]) if r["passphrase_enc"] else None,
-        )
+        ServerExport(id=r["id"], name=r["name"], host=r["host"])
         for r in server_rows
     ]
 
@@ -105,16 +88,9 @@ async def import_config(body: ConfigExport):
         # サーバを再作成
         for s in body.servers:
             await db.execute(
-                "INSERT INTO servers (id, name, host, port, username, auth_type, "
-                "password_enc, private_key_enc, passphrase_enc, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    s.id, s.name, s.host, s.port, s.username, s.auth_type,
-                    encrypt(s.password) if s.password else None,
-                    encrypt(s.private_key) if s.private_key else None,
-                    encrypt(s.passphrase) if s.passphrase else None,
-                    now, now,
-                ),
+                "INSERT INTO servers (id, name, host, created_at, updated_at) "
+                "VALUES (?,?,?,?,?)",
+                (s.id, s.name, s.host, now, now),
             )
 
         # ジョブを再作成

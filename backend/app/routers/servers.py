@@ -38,10 +38,9 @@ async def create_server(body: ServerCreate):
     worker_token = secrets.token_urlsafe(32) if body.generate_worker_token else None
     async with get_db() as db:
         await db.execute(
-            "INSERT INTO servers (id, name, host, port, username, auth_type, "
-            "server_type, worker_token, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (sid, body.name, body.host, 443, "", "password", "ops_worker", worker_token, now, now),
+            "INSERT INTO servers (id, name, host, worker_token, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (sid, body.name, body.host, worker_token, now, now),
         )
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (sid,))

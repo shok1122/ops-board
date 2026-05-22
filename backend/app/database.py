@@ -15,13 +15,7 @@ CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     host TEXT NOT NULL,
-    port INTEGER NOT NULL DEFAULT 22,
-    username TEXT NOT NULL DEFAULT '',
-    auth_type TEXT NOT NULL DEFAULT 'password',
-    password_enc TEXT,
-    private_key_enc TEXT,
-    passphrase_enc TEXT,
-    server_type TEXT NOT NULL DEFAULT 'ssh',
+    worker_token TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -94,13 +88,24 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(_SCHEMA)
         await db.commit()
-        # マイグレーション: server_type カラムが存在しない場合は追加
+        # マイグレーション: servers を新スキーマ（SSH列削除）に再作成
         cur = await db.execute("PRAGMA table_info(servers)")
-        cols = [row[1] for row in await cur.fetchall()]
-        if "server_type" not in cols:
-            await db.execute(
-                "ALTER TABLE servers ADD COLUMN server_type TEXT NOT NULL DEFAULT 'ssh'"
-            )
+        server_cols = [row[1] for row in await cur.fetchall()]
+        if "port" in server_cols:
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS servers_new (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    host TEXT NOT NULL,
+                    worker_token TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO servers_new (id, name, host, worker_token, created_at, updated_at)
+                SELECT id, name, host, worker_token, created_at, updated_at FROM servers;
+                DROP TABLE servers;
+                ALTER TABLE servers_new RENAME TO servers;
+            """)
             await db.commit()
         # マイグレーション: jobs に execution_type カラム追加
         cur = await db.execute("PRAGMA table_info(jobs)")
@@ -113,13 +118,6 @@ async def init_db():
                 "UPDATE jobs SET execution_type = 'local' "
                 "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
             )
-            await db.commit()
-
-        # マイグレーション: servers に worker_token カラム追加
-        cur = await db.execute("PRAGMA table_info(servers)")
-        server_cols2 = [row[1] for row in await cur.fetchall()]
-        if "worker_token" not in server_cols2:
-            await db.execute("ALTER TABLE servers ADD COLUMN worker_token TEXT")
             await db.commit()
 
         # マイグレーション: server_status を新スキーマ（id列削除）に再作成
