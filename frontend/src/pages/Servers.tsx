@@ -235,7 +235,16 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
 function WorkerCredentials({ server, status }: { server: ServerType; status?: ServerStatus }) {
   const [copied, setCopied] = useState(false)
   const copyId = () => {
-    navigator.clipboard.writeText(server.id)
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(server.id)
+    } else {
+      const el = document.createElement('textarea')
+      el.value = server.id
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
