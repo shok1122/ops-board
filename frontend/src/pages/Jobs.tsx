@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Pencil, Play, ToggleLeft, ToggleRight, Loader2, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { getJobs, createJob, updateJob, deleteJob, triggerJob, toggleJob, getServers } from '../api/client'
 import type { Job, JobCreate, Server, UnifiedScript, JobTemplateConfigField } from '../types'
 import StatusBadge from '../components/StatusBadge'
@@ -38,6 +38,7 @@ const CRON_PRESETS = [
 
 export default function Jobs() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data, isLoading } = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs() })
   const { data: servers } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: Job }>({ open: false })
@@ -73,6 +74,17 @@ export default function Jobs() {
     setTemplateBaseScript('')
     setModal({ open: true })
   }
+
+  useEffect(() => {
+    if (!servers) return
+    const create = searchParams.get('create')
+    const serverId = searchParams.get('server_id')
+    if (create === 'true') {
+      openCreate(serverId ?? undefined)
+      setSearchParams({}, { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servers])
   const openEdit = (j: Job) => {
     setForm({
       name: j.name, description: j.description ?? '', server_id: j.server_id,

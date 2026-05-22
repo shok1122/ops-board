@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -282,6 +283,7 @@ function WorkerCredentials({ server }: { server: ServerType }) {
 
 export default function Servers() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
   const [form, setForm] = useState<ServerCreate>(emptyForm)
@@ -381,6 +383,12 @@ export default function Servers() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => navigate(`/jobs?create=true&server_id=${s.id}`)}
+                      className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> ジョブ追加
+                    </button>
                     <div className="w-px h-5 bg-gray-200" />
                     <button onClick={() => openEdit(s)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                       <Pencil className="h-4 w-4" />
