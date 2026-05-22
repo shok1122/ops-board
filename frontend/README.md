@@ -128,6 +128,7 @@ getServers()
 createServer(data)
 updateServer(id, data)        // data may include regenerate_token: true
 deleteServer(id)
+revokeWorkerToken(id)         // DELETE /servers/{id}/worker-token — sets token to null
 getAllLatestStatuses()         // GET /servers/statuses/latest
 getServerStatusHistory(id)
 getServerJobResults(id)       // Recent job execution results for a server

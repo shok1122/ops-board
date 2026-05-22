@@ -177,6 +177,7 @@ POST   /servers                          Create (generates worker_token)
 GET    /servers/{id}                     Get
 PUT    /servers/{id}                     Update (regenerate_token=true to rotate token)
 DELETE /servers/{id}                     Delete
+DELETE /servers/{id}/worker-token        Revoke worker token (sets token to null)
 GET    /servers/statuses/latest          Latest status snapshot for all servers
 GET    /servers/{id}/status              Latest status snapshot for a server
 GET    /servers/{id}/status/history      Status history for a server

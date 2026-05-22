@@ -227,6 +227,7 @@ POST   /api/v1/servers              Create server
 GET    /api/v1/servers/{id}         Get server
 PUT    /api/v1/servers/{id}         Update server (optionally regenerate token)
 DELETE /api/v1/servers/{id}         Delete server
+DELETE /api/v1/servers/{id}/worker-token  Revoke worker token (sets token to null)
 GET    /api/v1/servers/statuses/latest         Latest status for all servers
 GET    /api/v1/servers/{id}/status            Latest status for a server
 GET    /api/v1/servers/{id}/status/history    Status history for a server
