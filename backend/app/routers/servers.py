@@ -110,11 +110,8 @@ async def get_all_latest_statuses():
         rows = await cur.fetchall()
     return [
         ServerStatusOut(
-            id=r["id"], server_id=r["server_id"], checked_at=r["checked_at"],
-            cpu_load_1m=r["cpu_load_1m"], mem_used_mb=r["mem_used_mb"],
-            mem_total_mb=r["mem_total_mb"], disk_used_gb=r["disk_used_gb"],
-            disk_total_gb=r["disk_total_gb"], uptime_seconds=r["uptime_seconds"],
-            os_info=r["os_info"], error=r["error"],
+            server_id=r["server_id"], checked_at=r["checked_at"],
+            uptime_seconds=r["uptime_seconds"], os_info=r["os_info"], error=r["error"],
             agent_version=r["agent_version"], go_version=r["go_version"],
             arch=r["arch"], hostname=r["hostname"],
         )
@@ -135,11 +132,8 @@ async def get_server_status_history(server_id: str, limit: int = 48):
         rows = await cur.fetchall()
     return [
         ServerStatusOut(
-            id=r["id"], server_id=r["server_id"], checked_at=r["checked_at"],
-            cpu_load_1m=r["cpu_load_1m"], mem_used_mb=r["mem_used_mb"],
-            mem_total_mb=r["mem_total_mb"], disk_used_gb=r["disk_used_gb"],
-            disk_total_gb=r["disk_total_gb"], uptime_seconds=r["uptime_seconds"],
-            os_info=r["os_info"], error=r["error"],
+            server_id=r["server_id"], checked_at=r["checked_at"],
+            uptime_seconds=r["uptime_seconds"], os_info=r["os_info"], error=r["error"],
             agent_version=r["agent_version"], go_version=r["go_version"],
             arch=r["arch"], hostname=r["hostname"],
         )
@@ -216,9 +210,8 @@ async def get_server_status(server_id: str):
     if not row:
         raise HTTPException(404, "No status check found")
     return ServerStatusOut(
-        id=row["id"], server_id=row["server_id"], checked_at=row["checked_at"],
-        cpu_load_1m=row["cpu_load_1m"], mem_used_mb=row["mem_used_mb"],
-        mem_total_mb=row["mem_total_mb"], disk_used_gb=row["disk_used_gb"],
-        disk_total_gb=row["disk_total_gb"], uptime_seconds=row["uptime_seconds"],
-        os_info=row["os_info"], error=row["error"],
+        server_id=row["server_id"], checked_at=row["checked_at"],
+        uptime_seconds=row["uptime_seconds"], os_info=row["os_info"], error=row["error"],
+        agent_version=row["agent_version"], go_version=row["go_version"],
+        arch=row["arch"], hostname=row["hostname"],
     )

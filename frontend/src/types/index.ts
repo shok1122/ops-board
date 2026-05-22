@@ -15,14 +15,8 @@ export interface ServerCreate {
 }
 
 export interface ServerStatus {
-  id: string
   server_id: string
   checked_at: string
-  cpu_load_1m?: number
-  mem_used_mb?: number
-  mem_total_mb?: number
-  disk_used_gb?: number
-  disk_total_gb?: number
   uptime_seconds?: number
   os_info?: string
   error?: string

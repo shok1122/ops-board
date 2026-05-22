@@ -118,12 +118,12 @@ async def receive_health(
 
     async with get_db() as db:
         await db.execute(
-            "INSERT INTO server_status "
-            "(id, server_id, checked_at, uptime_seconds, os_info, "
+            "INSERT OR REPLACE INTO server_status "
+            "(server_id, checked_at, uptime_seconds, os_info, "
             "agent_version, go_version, arch, hostname, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (
-                new_id(), server_id, now,
+                server_id, now,
                 int(body.agent.uptime_seconds),
                 body.agent.os,
                 body.agent.version,

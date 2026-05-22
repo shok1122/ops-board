@@ -58,18 +58,17 @@ CREATE TABLE IF NOT EXISTS executions (
 );
 
 CREATE TABLE IF NOT EXISTS server_status (
-    id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     checked_at TEXT NOT NULL,
-    cpu_load_1m REAL,
-    mem_used_mb INTEGER,
-    mem_total_mb INTEGER,
-    disk_used_gb REAL,
-    disk_total_gb REAL,
     uptime_seconds INTEGER,
     os_info TEXT,
     error TEXT,
-    created_at TEXT NOT NULL
+    agent_version TEXT,
+    go_version TEXT,
+    arch TEXT,
+    hostname TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (server_id, checked_at)
 );
 
 CREATE TABLE IF NOT EXISTS worker_checks (
@@ -123,13 +122,34 @@ async def init_db():
             await db.execute("ALTER TABLE servers ADD COLUMN worker_token TEXT")
             await db.commit()
 
-        # マイグレーション: server_status にエージェント情報カラム追加
+        # マイグレーション: server_status を新スキーマ（id列削除）に再作成
         cur = await db.execute("PRAGMA table_info(server_status)")
         ss_cols = [row[1] for row in await cur.fetchall()]
-        for col in ["agent_version", "go_version", "arch", "hostname"]:
-            if col not in ss_cols:
-                await db.execute(f"ALTER TABLE server_status ADD COLUMN {col} TEXT")
-        await db.commit()
+        if "id" in ss_cols:
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS server_status_new (
+                    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+                    checked_at TEXT NOT NULL,
+                    uptime_seconds INTEGER,
+                    os_info TEXT,
+                    error TEXT,
+                    agent_version TEXT,
+                    go_version TEXT,
+                    arch TEXT,
+                    hostname TEXT,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (server_id, checked_at)
+                );
+                INSERT OR IGNORE INTO server_status_new
+                    (server_id, checked_at, uptime_seconds, os_info, error,
+                     agent_version, go_version, arch, hostname, created_at)
+                SELECT server_id, checked_at, uptime_seconds, os_info, error,
+                       agent_version, go_version, arch, hostname, created_at
+                FROM server_status;
+                DROP TABLE server_status;
+                ALTER TABLE server_status_new RENAME TO server_status;
+            """)
+            await db.commit()
 
 
 @asynccontextmanager

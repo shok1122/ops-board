@@ -28,14 +28,8 @@ class ServerOut(BaseModel):
 
 
 class ServerStatusOut(BaseModel):
-    id: str
     server_id: str
     checked_at: str
-    cpu_load_1m: Optional[float] = None
-    mem_used_mb: Optional[int] = None
-    mem_total_mb: Optional[int] = None
-    disk_used_gb: Optional[float] = None
-    disk_total_gb: Optional[float] = None
     uptime_seconds: Optional[int] = None
     os_info: Optional[str] = None
     error: Optional[str] = None

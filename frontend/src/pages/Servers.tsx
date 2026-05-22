@@ -90,11 +90,6 @@ function StatusSummary({ status }: { status: ServerStatus }) {
     )
   }
 
-  const memPct = status.mem_total_mb && status.mem_used_mb
-    ? Math.round((status.mem_used_mb / status.mem_total_mb) * 100) : null
-  const diskPct = status.disk_total_gb && status.disk_used_gb
-    ? Math.round((status.disk_used_gb / status.disk_total_gb) * 100) : null
-
   const agentLabel = [
     status.agent_version,
     status.go_version && `Go ${status.go_version}`,
@@ -106,9 +101,6 @@ function StatusSummary({ status }: { status: ServerStatus }) {
       {status.hostname && <span className="text-gray-500 w-full font-medium">{status.hostname}</span>}
       {status.os_info && <span className="text-gray-400 w-full">{status.os_info}</span>}
       {agentLabel && <Chip label="Agent" value={agentLabel} />}
-      {status.cpu_load_1m != null && <Chip label="CPU" value={`${status.cpu_load_1m.toFixed(2)}`} />}
-      {memPct != null && <Chip label="メモリ" value={`${status.mem_used_mb}/${status.mem_total_mb}MB (${memPct}%)`} warn={memPct > 80} />}
-      {diskPct != null && <Chip label="ディスク" value={`${status.disk_used_gb}/${status.disk_total_gb}GB (${diskPct}%)`} warn={diskPct > 80} />}
       {status.uptime_seconds != null && <Chip label="稼働" value={formatUptime(status.uptime_seconds)} />}
       <span className="text-gray-400 ml-auto">{new Date(status.checked_at).toLocaleString('ja-JP')} 時点</span>
     </div>
