@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import shlex
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -75,8 +76,16 @@ async def _execute_job(job_id: str):
 
     try:
         timeout = float(job["timeout_sec"])
+        if job["type"] == "log_fetch":
+            log_path = (job["log_path"] or "").strip()
+            if not log_path:
+                raise ValueError("ログファイルパスが設定されていません")
+            quoted = shlex.quote(log_path)
+            command = f'if [ -f {quoted} ]; then cat {quoted}; else echo "ファイルが見つかりません: {log_path}" >&2; exit 1; fi'
+        else:
+            command = job["command"] or "echo 'No command set'"
         result = await run_local_command(
-            job["command"] or "echo 'No command set'",
+            command,
             remote_host=job["host"] or "",
             timeout=timeout,
         )
@@ -162,8 +171,16 @@ async def _trigger_job_manual(job_id: str) -> str:
 
     try:
         timeout = float(job["timeout_sec"])
+        if job["type"] == "log_fetch":
+            log_path = (job["log_path"] or "").strip()
+            if not log_path:
+                raise ValueError("ログファイルパスが設定されていません")
+            quoted = shlex.quote(log_path)
+            command = f'if [ -f {quoted} ]; then cat {quoted}; else echo "ファイルが見つかりません: {log_path}" >&2; exit 1; fi'
+        else:
+            command = job["command"] or "echo 'No command set'"
         result = await run_local_command(
-            job["command"] or "echo 'No command set'",
+            command,
             remote_host=job["host"] or "",
             timeout=timeout,
         )

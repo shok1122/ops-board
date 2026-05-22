@@ -166,6 +166,7 @@ export interface ServerJobResult {
   finished_at?: string
   output?: JobResultOutput
   raw_stdout?: string
+  stderr?: string
 }
 
 // ── Scripts ──────────────────────────────────────────────────────────────────

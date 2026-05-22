@@ -139,6 +139,7 @@ class ServerJobResult(BaseModel):
     finished_at: Optional[str]
     output: Optional[JobResultOutput] = None
     raw_stdout: Optional[str] = None
+    stderr: Optional[str] = None
 
 
 # ── Scripts ──────────────────────────────────────────────────────────────────

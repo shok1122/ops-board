@@ -150,7 +150,7 @@ async def get_server_job_results(server_id: str):
 
         cur = await db.execute(
             "SELECT e.id, e.job_id, j.name AS job_name, e.status AS execution_status, "
-            "e.finished_at, e.stdout, e.parsed_result "
+            "e.finished_at, e.stdout, e.stderr, e.parsed_result "
             "FROM executions e "
             "INNER JOIN jobs j ON e.job_id = j.id "
             "INNER JOIN ("
@@ -190,6 +190,7 @@ async def get_server_job_results(server_id: str):
             finished_at=row["finished_at"],
             output=output,
             raw_stdout=raw_stdout,
+            stderr=row["stderr"] or None,
         ))
 
     return results
