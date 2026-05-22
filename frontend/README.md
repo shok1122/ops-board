@@ -1,7 +1,7 @@
 # OpsBoard Frontend
 
 The frontend application for OpsBoard.  
-A SPA built with React + TypeScript + Vite that communicates with the backend API to display remote server task execution results.
+A SPA built with React + TypeScript + Vite that communicates with the backend API to display remote server task execution results and worker monitoring data.
 
 ## Tech Stack
 
@@ -37,18 +37,21 @@ frontend/
 │   │   └── index.ts        # TypeScript types (mirrors backend Pydantic models)
 │   │
 │   ├── components/         # Reusable components
-│   │   ├── Layout.tsx      # Sidebar navigation + Outlet + logout button
+│   │   ├── Layout.tsx      # Sidebar navigation + Outlet + logout button + config export
 │   │   ├── StatusBadge.tsx # Execution status badge (success / failure / running / timeout)
-│   │   └── LogViewer.tsx   # Log display (NDJSON table / raw text)
+│   │   ├── LogViewer.tsx   # Log display (NDJSON table / raw text)
+│   │   └── ScriptPicker.tsx # Script selection modal for job creation
 │   │
 │   └── pages/              # Page components
 │       ├── Login.tsx           # Login screen
 │       ├── Dashboard.tsx       # Summary cards + recent execution list
-│       ├── Servers.tsx         # Server management (CRUD + connection test)
+│       ├── Servers.tsx         # Server management (CRUD + worker token display)
 │       ├── Jobs.tsx            # Job management (CRUD + manual trigger + enable/disable)
 │       ├── JobDetail.tsx       # Job detail + execution history list
+│       ├── JobResultView.tsx   # Job result display component used in server detail
 │       ├── Executions.tsx      # All execution history (filter + pagination)
-│       └── ExecutionDetail.tsx # Execution detail + log viewer
+│       ├── ExecutionDetail.tsx # Execution detail + log viewer
+│       └── Scripts.tsx         # Script management (CRUD)
 │
 ├── index.html
 ├── vite.config.ts          # Vite config + API proxy
@@ -118,14 +121,16 @@ In Docker, nginx proxies `/api/*` to the backend.
 
 ```typescript
 // Auth (api/auth.ts)
-loginApi(password)        // POST /auth/login → { token, auth_required }
+loginApi(password)            // POST /auth/login → { token, auth_required }
 
 // Servers
 getServers()
 createServer(data)
-updateServer(id, data)
+updateServer(id, data)        // data may include regenerate_token: true
 deleteServer(id)
-testServer(id)            // SSH connection test
+getAllLatestStatuses()         // GET /servers/statuses/latest
+getServerStatusHistory(id)
+getServerJobResults(id)       // Recent job execution results for a server
 
 // Jobs
 getJobs(serverId?)
@@ -133,19 +138,32 @@ getJob(id)
 createJob(data)
 updateJob(id, data)
 deleteJob(id)
-triggerJob(id)            // Manual trigger
-toggleJob(id, enabled)    // Enable / disable
+triggerJob(id)                // Manual trigger
+toggleJob(id, enabled)        // Enable / disable
 
 // Execution History
 getExecutions({ job_id?, status?, limit?, offset? })
 getExecution(id)
+deleteExecution(id)
+
+// Worker Checks
+getWorkerChecks(serverId?)    // Latest check results from ops-worker
+
+// Scripts
+getScripts(language?)
+createScript(data)
+updateScript(id, data)
+deleteScript(id)
+
+// Job Templates
+getJobTemplates()
 
 // Config export / import
 exportConfig()
 importConfig(data)
 
 // Dashboard aggregation
-getDashboardStats()       // Fetches jobs + executions in parallel and aggregates
+getDashboardStats()           // Fetches jobs + executions in parallel and aggregates
 ```
 
 ## Type Definitions (`types/index.ts`)
@@ -154,14 +172,18 @@ TypeScript types that mirror the backend Pydantic models.
 
 | Type | Backend Model | Description |
 |------|--------------|-------------|
-| `ServerType` | — | `'remote_execution'` \| `'local_execution'` |
-| `Server` | `ServerOut` | Server info (credentials excluded) |
+| `Server` | `ServerOut` | Server info |
 | `ServerCreate` | `ServerCreate` | Server creation request |
+| `ServerStatus` | `ServerStatusOut` | Status snapshot from ops-worker |
+| `WorkerCheck` | — | Check result from ops-worker |
+| `WorkerMetric` | — | Individual metric within a check result |
 | `Job` | `JobOut` | Job info |
 | `JobCreate` | `JobCreate` | Job creation request |
 | `ExecutionSummary` | `ExecutionSummary` | Execution history entry (no logs) |
-| `Execution` | `ExecutionOut` | Execution detail (includes stdout / parsed_result) |
+| `Execution` | `ExecutionOut` | Execution detail (includes stdout / stderr / parsed_result) |
 | `LogEntry` | — | Parsed result of a single NDJSON line |
+| `Script` | `ScriptOut` | Script file info |
+| `ScriptCreate` | `ScriptCreate` | Script creation request |
 | `PagedResponse<T>` | `PagedResponse` | `{ items: T[], total: number }` |
 
 ## Polling Intervals
@@ -187,7 +209,8 @@ This page is never shown when authentication is disabled.
 
 Shell component with sidebar navigation and `<Outlet>`.  
 All pages render as children of this Layout.  
-A logout button is shown at the bottom of the sidebar when authentication is enabled.
+Navigation: Dashboard / Servers / Jobs / Execution History / Scripts.  
+A config export button and a logout button (when auth is enabled) are shown at the bottom of the sidebar.
 
 ### `StatusBadge.tsx`
 
@@ -207,6 +230,11 @@ Log output display component.
 - **NDJSON** logs are shown as a structured table with timestamp, level, and message columns
 - **Plain text** is rendered in a `<pre>` block as-is
 - The `maxHeight` prop controls the scrollable area height
+
+### `ScriptPicker.tsx`
+
+Modal for selecting a script when creating or editing a job.  
+Fetches the script list from `GET /api/v1/scripts` and allows the user to preview content before choosing.
 
 ## Custom CSS Classes
 
