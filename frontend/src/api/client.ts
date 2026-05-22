@@ -45,6 +45,9 @@ export const updateServer = (id: string, data: Partial<ServerCreate> & { regener
 export const deleteServer = (id: string) =>
   api.delete(`/servers/${id}`)
 
+export const revokeWorkerToken = (id: string) =>
+  api.delete(`/servers/${id}/worker-token`)
+
 export const getAllLatestStatuses = () =>
   api.get<ServerStatus[]>('/servers/statuses/latest').then(r => r.data)
 

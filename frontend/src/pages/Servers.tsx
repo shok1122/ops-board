@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound, Activity, PlayCircle } from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound, Activity, PlayCircle, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import {
-  getServers, createServer, updateServer, deleteServer,
+  getServers, createServer, updateServer, deleteServer, revokeWorkerToken,
   getAllLatestStatuses,
   getServerJobResults,
   getWorkerChecks,
@@ -233,7 +233,15 @@ function Chip({ label, value, warn }: { label: string; value: string; warn?: boo
 
 
 function WorkerCredentials({ server, status }: { server: ServerType; status?: ServerStatus }) {
+  const qc = useQueryClient()
   const [copied, setCopied] = useState(false)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
+
+  const revokeMutation = useMutation({
+    mutationFn: () => revokeWorkerToken(server.id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['servers'] }); setConfirmRevoke(false) },
+  })
+
   const copyId = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(server.id)
@@ -258,14 +266,38 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
       {server.has_worker_token ? (
         <>
           {status && <StatusSummary status={status} />}
-          <button
-            onClick={copyId}
-            className="mt-2 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            title="Worker IDをコピー"
-          >
-            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-            <code className="font-mono">{server.id.slice(0, 8)}…</code>
-          </button>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={copyId}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              title="Worker IDをコピー"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+              <code className="font-mono">{server.id.slice(0, 8)}…</code>
+            </button>
+            {confirmRevoke ? (
+              <span className="flex items-center gap-1 ml-auto">
+                <span className="text-xs text-gray-500">削除しますか？</span>
+                <button
+                  onClick={() => revokeMutation.mutate()}
+                  disabled={revokeMutation.isPending}
+                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                >
+                  {revokeMutation.isPending ? '削除中…' : '削除'}
+                </button>
+                <button onClick={() => setConfirmRevoke(false)} className="text-xs text-gray-400 hover:text-gray-600">キャンセル</button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmRevoke(true)}
+                className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                title="ワーカートークンを削除"
+              >
+                <X className="h-3 w-3" />
+                トークン削除
+              </button>
+            )}
+          </div>
           <WorkerReports serverId={server.id} />
         </>
       ) : (

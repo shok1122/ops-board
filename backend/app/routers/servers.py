@@ -85,6 +85,19 @@ async def update_server(server_id: str, body: ServerUpdate):
     return _row_to_out(row, show_token=body.regenerate_token)
 
 
+@router.delete("/{server_id}/worker-token", status_code=204)
+async def revoke_worker_token(server_id: str):
+    async with get_db() as db:
+        cur = await db.execute("SELECT id FROM servers WHERE id = ?", (server_id,))
+        if not await cur.fetchone():
+            raise HTTPException(404, "Server not found")
+        await db.execute(
+            "UPDATE servers SET worker_token = NULL, updated_at = ? WHERE id = ?",
+            (now_iso(), server_id),
+        )
+        await db.commit()
+
+
 @router.delete("/{server_id}", status_code=204)
 async def delete_server(server_id: str):
     async with get_db() as db:
