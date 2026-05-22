@@ -528,7 +528,20 @@ function CredentialRow({ label, value, secret }: { label: string; value: string;
         </button>
       )}
       <button
-        onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+        onClick={() => {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(value)
+          } else {
+            const el = document.createElement('textarea')
+            el.value = value
+            document.body.appendChild(el)
+            el.select()
+            document.execCommand('copy')
+            document.body.removeChild(el)
+          }
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+        }}
         className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 shrink-0"
       >
         {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
