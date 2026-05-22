@@ -66,7 +66,6 @@ CREATE TABLE IF NOT EXISTS server_status (
 );
 
 CREATE TABLE IF NOT EXISTS worker_checks (
-    id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     check_name TEXT NOT NULL,
     check_type TEXT NOT NULL,
@@ -77,7 +76,7 @@ CREATE TABLE IF NOT EXISTS worker_checks (
     error TEXT,
     reported_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    UNIQUE(server_id, check_name)
+    PRIMARY KEY (server_id, check_name)
 );
 
 """
@@ -146,6 +145,35 @@ async def init_db():
                 FROM server_status;
                 DROP TABLE server_status;
                 ALTER TABLE server_status_new RENAME TO server_status;
+            """)
+            await db.commit()
+
+        # マイグレーション: worker_checks を新スキーマ（id列削除）に再作成
+        cur = await db.execute("PRAGMA table_info(worker_checks)")
+        wc_cols = [row[1] for row in await cur.fetchall()]
+        if "id" in wc_cols:
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS worker_checks_new (
+                    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+                    check_name TEXT NOT NULL,
+                    check_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT,
+                    metrics_json TEXT,
+                    labels_json TEXT,
+                    error TEXT,
+                    reported_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (server_id, check_name)
+                );
+                INSERT OR IGNORE INTO worker_checks_new
+                    (server_id, check_name, check_type, status, message,
+                     metrics_json, labels_json, error, reported_at, created_at)
+                SELECT server_id, check_name, check_type, status, message,
+                       metrics_json, labels_json, error, reported_at, created_at
+                FROM worker_checks;
+                DROP TABLE worker_checks;
+                ALTER TABLE worker_checks_new RENAME TO worker_checks;
             """)
             await db.commit()
 

@@ -209,7 +209,7 @@ function ServerWorkerChecks({ serverId }: { serverId: string }) {
     <div className="mt-3">
       <p className="text-xs font-medium text-gray-500 mb-2">リモート実行結果</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {checks.map(c => <WorkerCheckCard key={c.id} c={c} />)}
+        {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} />)}
       </div>
     </div>
   )

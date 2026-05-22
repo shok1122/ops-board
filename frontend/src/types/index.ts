@@ -146,7 +146,6 @@ export interface WorkerMetric {
 }
 
 export interface WorkerCheck {
-  id: string
   server_id: string
   server_name?: string
   check_name: string

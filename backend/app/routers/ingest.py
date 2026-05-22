@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from app.database import get_db, new_id, now_iso
+from app.database import get_db, now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +81,9 @@ async def receive_report(
     async with get_db() as db:
         await db.execute(
             """INSERT INTO worker_checks
-               (id, server_id, check_name, check_type, status, message,
+               (server_id, check_name, check_type, status, message,
                 metrics_json, labels_json, error, reported_at, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)
+               VALUES (?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(server_id, check_name) DO UPDATE SET
                  check_type=excluded.check_type,
                  status=excluded.status,
@@ -93,7 +93,7 @@ async def receive_report(
                  error=excluded.error,
                  reported_at=excluded.reported_at""",
             (
-                new_id(), server_id,
+                server_id,
                 body.result.name, body.result.type,
                 body.result.status, body.result.message,
                 json.dumps([m.model_dump() for m in body.result.metrics]),

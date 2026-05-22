@@ -27,7 +27,6 @@ async def list_worker_checks(server_id: Optional[str] = Query(default=None)):
 
     return [
         {
-            "id": r["id"],
             "server_id": r["server_id"],
             "server_name": r["server_name"],
             "check_name": r["check_name"],
