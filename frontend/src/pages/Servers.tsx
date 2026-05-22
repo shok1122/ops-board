@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound } from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, Server, AlertCircle, Copy, Check, KeyRound, Activity, PlayCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -197,24 +197,6 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
   )
 }
 
-function ServerWorkerChecks({ serverId }: { serverId: string }) {
-  const { data: checks = [] } = useQuery<WorkerCheck[]>({
-    queryKey: ['worker-checks', serverId],
-    queryFn: () => getWorkerChecks(serverId),
-    refetchInterval: 30_000,
-  })
-
-  if (checks.length === 0) return null
-
-  return (
-    <div className="mt-3">
-      <p className="text-sm font-medium text-gray-500 mb-2">リモート実行結果</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} />)}
-      </div>
-    </div>
-  )
-}
 
 function ServerJobResults({ serverId }: { serverId: string }) {
   const { data } = useQuery({
@@ -225,7 +207,10 @@ function ServerJobResults({ serverId }: { serverId: string }) {
   if (!data || data.length === 0) return null
   return (
     <div className="mt-3">
-      <p className="text-sm font-medium text-gray-500 mb-2">ジョブ実行結果</p>
+      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-2">
+        <PlayCircle className="h-4 w-4" />
+        ジョブ実行結果
+      </div>
       <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
         {data.map(r => (
           <div key={r.job_id} className="break-inside-avoid mb-2">
@@ -261,7 +246,7 @@ function CopyButton({ text }: { text: string }) {
 function WorkerCredentials({ server }: { server: ServerType }) {
   return (
     <div className="mt-3">
-      <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1.5">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-1.5">
         <KeyRound className="h-4 w-4" />
         ワーカー接続情報
       </div>
@@ -277,6 +262,28 @@ function WorkerCredentials({ server }: { server: ServerType }) {
       ) : (
         <p className="text-sm text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
       )}
+    </div>
+  )
+}
+
+function WorkerReports({ serverId }: { serverId: string }) {
+  const { data: checks = [] } = useQuery<WorkerCheck[]>({
+    queryKey: ['worker-checks', serverId],
+    queryFn: () => getWorkerChecks(serverId),
+    refetchInterval: 30_000,
+  })
+
+  if (checks.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 mb-2">
+        <Activity className="h-4 w-4" />
+        ワーカーレポート
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} />)}
+      </div>
     </div>
   )
 }
@@ -403,10 +410,10 @@ export default function Servers() {
                 </div>
 
                 <div className="px-5 py-4 bg-gray-50/50">
-                  {ss?.data && <StatusSummary status={ss.data} />}
-                  <ServerWorkerChecks serverId={s.id} />
-                  <ServerJobResults serverId={s.id} />
                   <WorkerCredentials server={s} />
+                  <WorkerReports serverId={s.id} />
+                  <ServerJobResults serverId={s.id} />
+                  {ss?.data && <StatusSummary status={ss.data} />}
                 </div>
               </div>
             )
