@@ -305,7 +305,7 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
               title="Worker IDをコピー"
             >
               {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-              <code className="font-mono">{workerId.slice(0, 12)}…</code>
+              <code className="font-mono min-w-0 break-all">{workerId}</code>
             </button>
             {confirmRevoke ? (
               <span className="flex items-center gap-1 ml-auto">
