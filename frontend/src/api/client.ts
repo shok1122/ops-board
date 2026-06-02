@@ -110,6 +110,9 @@ export const getWorkerChecks = (serverId?: string) =>
     params: serverId ? { server_id: serverId } : undefined,
   }).then(r => r.data)
 
+export const deleteWorkerCheck = (serverId: string, checkName: string) =>
+  api.delete(`/worker-checks/${encodeURIComponent(serverId)}/${encodeURIComponent(checkName)}`)
+
 // Worker Ingest Logs
 export const getWorkerLogs = (serverId?: string, limit = 50) =>
   api.get<WorkerIngestLog[]>('/worker-logs', {

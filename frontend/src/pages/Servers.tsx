@@ -10,6 +10,7 @@ import {
   getAllLatestStatuses,
   getServerJobResults,
   getWorkerChecks,
+  deleteWorkerCheck,
 } from '../api/client'
 import type { Server as ServerType, ServerCreate, ServerStatus, WorkerCheck } from '../types'
 import { JobResultCard } from '../components/JobResultView'
@@ -108,7 +109,14 @@ function StatusSummary({ status }: { status: ServerStatus }) {
   )
 }
 
-function WorkerCheckCard({ c }: { c: WorkerCheck }) {
+function WorkerCheckCard({ c, serverId }: { c: WorkerCheck; serverId: string }) {
+  const qc = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteMut = useMutation({
+    mutationFn: () => deleteWorkerCheck(serverId, c.check_name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['worker-checks', serverId] }),
+  })
+
   const accentBar =
     c.status === 'ok' ? 'bg-emerald-400' :
     c.status === 'error' ? 'bg-red-400' :
@@ -145,9 +153,31 @@ function WorkerCheckCard({ c }: { c: WorkerCheck }) {
               </span>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-medium ${statusBadge}`}>
-            {c.status}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`rounded-full px-2 py-0.5 text-sm font-medium ${statusBadge}`}>
+              {c.status}
+            </span>
+            {confirmDelete ? (
+              <span className="flex items-center gap-1">
+                <button
+                  onClick={() => deleteMut.mutate()}
+                  disabled={deleteMut.isPending}
+                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                >
+                  {deleteMut.isPending ? '削除中…' : '削除'}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} className="text-xs text-gray-400 hover:text-gray-600">×</button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="p-0.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
+                title="このレポートを削除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -323,7 +353,7 @@ function WorkerReports({ serverId }: { serverId: string }) {
         ワーカーレポート
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} />)}
+        {checks.map(c => <WorkerCheckCard key={c.check_name} c={c} serverId={serverId} />)}
       </div>
     </div>
   )

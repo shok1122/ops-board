@@ -1,11 +1,23 @@
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.database import get_db
 
 router = APIRouter(prefix="/worker-checks", tags=["worker-checks"])
+
+
+@router.delete("/{server_id}/{check_name}", status_code=204)
+async def delete_worker_check(server_id: str, check_name: str):
+    async with get_db() as db:
+        cur = await db.execute(
+            "DELETE FROM worker_checks WHERE server_id = ? AND check_name = ?",
+            (server_id, check_name),
+        )
+        await db.commit()
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Worker check not found")
 
 
 @router.get("")
