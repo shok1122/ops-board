@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+from app.config import settings
 from app.database import get_db, now_iso
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,17 @@ async def receive_report(
                 now,
             ),
         )
+        await db.execute(
+            "INSERT INTO worker_ingest_logs (server_id, log_type, check_name, status, message, received_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (server_id, "report", body.result.name, body.result.status, body.result.message or None, now),
+        )
+        await db.execute(
+            """DELETE FROM worker_ingest_logs WHERE server_id = ? AND id NOT IN (
+                SELECT id FROM worker_ingest_logs WHERE server_id = ? ORDER BY id DESC LIMIT ?
+            )""",
+            (server_id, server_id, settings.worker_log_retention),
+        )
         await db.commit()
     logger.debug("Received report from %s: check=%s status=%s", body.hostname, body.result.name, body.result.status)
 
@@ -132,6 +144,17 @@ async def receive_health(
                 body.hostname,
                 now,
             ),
+        )
+        await db.execute(
+            "INSERT INTO worker_ingest_logs (server_id, log_type, check_name, status, message, received_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (server_id, "health", None, None, None, now),
+        )
+        await db.execute(
+            """DELETE FROM worker_ingest_logs WHERE server_id = ? AND id NOT IN (
+                SELECT id FROM worker_ingest_logs WHERE server_id = ? ORDER BY id DESC LIMIT ?
+            )""",
+            (server_id, server_id, settings.worker_log_retention),
         )
         await db.commit()
     logger.debug("Received healthcheck from %s (uptime=%.0fs)", body.hostname, body.agent.uptime_seconds)

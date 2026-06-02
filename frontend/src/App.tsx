@@ -9,6 +9,7 @@ import Executions from './pages/Executions'
 import JobDetail from './pages/JobDetail'
 import ExecutionDetail from './pages/ExecutionDetail'
 import Scripts from './pages/Scripts'
+import WorkerLogs from './pages/WorkerLogs'
 
 /** 認証が必要なルートのガード */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/executions" element={<Executions />} />
             <Route path="/executions/:executionId" element={<ExecutionDetail />} />
             <Route path="/scripts" element={<Scripts />} />
+            <Route path="/worker-logs" element={<WorkerLogs />} />
           </Route>
         </Routes>
       </BrowserRouter>

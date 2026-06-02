@@ -5,6 +5,7 @@ import type {
   Execution, ExecutionSummary,
   PagedResponse,
   WorkerCheck,
+  WorkerIngestLog,
   JobTemplate,
   Script, ScriptCreate,
 } from '../types'
@@ -107,6 +108,12 @@ export const importConfig = (data: unknown) =>
 export const getWorkerChecks = (serverId?: string) =>
   api.get<WorkerCheck[]>('/worker-checks', {
     params: serverId ? { server_id: serverId } : undefined,
+  }).then(r => r.data)
+
+// Worker Ingest Logs
+export const getWorkerLogs = (serverId?: string, limit = 50) =>
+  api.get<WorkerIngestLog[]>('/worker-logs', {
+    params: { ...(serverId ? { server_id: serverId } : {}), limit },
   }).then(r => r.data)
 
 // Job Templates

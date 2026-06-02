@@ -169,6 +169,19 @@ export interface ServerJobResult {
   stderr?: string
 }
 
+// ── Worker Ingest Logs ───────────────────────────────────────────────────────
+
+export interface WorkerIngestLog {
+  id: number
+  server_id: string
+  server_name?: string
+  log_type: 'report' | 'health'
+  check_name?: string
+  status?: string
+  message?: string
+  received_at: string
+}
+
 // ── Scripts ──────────────────────────────────────────────────────────────────
 
 export type ScriptLanguage = 'bash'

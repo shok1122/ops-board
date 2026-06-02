@@ -9,6 +9,7 @@ from app.scheduler import scheduler, reload_all_jobs, get_scheduler_status
 from app.routers import servers, jobs, executions, config, job_templates, scripts
 from app.routers.ingest import router as ingest_router
 from app.routers.worker_checks import router as worker_checks_router
+from app.routers.worker_logs import router as worker_logs_router
 from app.routers.auth import router as auth_router, require_auth
 
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +48,7 @@ app.include_router(config.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(job_templates.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts.router, prefix="/api/v1", dependencies=_auth)
 app.include_router(worker_checks_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(worker_logs_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/api/v1/health")

@@ -79,6 +79,19 @@ CREATE TABLE IF NOT EXISTS worker_checks (
     PRIMARY KEY (server_id, check_name)
 );
 
+CREATE TABLE IF NOT EXISTS worker_ingest_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    log_type TEXT NOT NULL,
+    check_name TEXT,
+    status TEXT,
+    message TEXT,
+    received_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_ingest_logs_server_id
+    ON worker_ingest_logs (server_id, id DESC);
+
 """
 
 

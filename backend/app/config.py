@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     scripts_dir: str = "/data/scripts"
 
     server_status_retention_days: int = 7
+    worker_log_retention: int = 100
 
     # Authentication settings
     # AUTH_PASSWORD が空の場合は認証無効
