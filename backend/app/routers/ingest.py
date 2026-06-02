@@ -60,13 +60,17 @@ def _extract_token(authorization: str) -> str:
 
 
 async def _authenticate_server(token: str) -> str:
+    parts = token.split(":", 1)
+    if len(parts) != 2:
+        raise HTTPException(401, "Invalid worker credential format")
+    worker_id, worker_secret = parts
     async with get_db() as db:
         cur = await db.execute(
-            "SELECT id FROM servers WHERE worker_token = ?", (token,)
+            "SELECT id, worker_secret FROM servers WHERE worker_id = ?", (worker_id,)
         )
         row = await cur.fetchone()
-        if not row:
-            raise HTTPException(401, "Invalid or unknown worker token")
+        if not row or row["worker_secret"] != worker_secret:
+            raise HTTPException(401, "Invalid worker credentials")
         return row["id"]
 
 

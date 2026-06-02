@@ -8,21 +8,23 @@ from pydantic import BaseModel, Field
 class ServerCreate(BaseModel):
     name: str
     host: str
-    generate_worker_token: bool = True
+    generate_worker_credential: bool = True
 
 
 class ServerUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
-    regenerate_token: bool = False
+    regenerate_id: bool = False
+    regenerate_secret: bool = False
 
 
 class ServerOut(BaseModel):
     id: str
     name: str
     host: str
-    has_worker_token: bool = False
-    worker_token: Optional[str] = None
+    has_worker_credential: bool = False
+    worker_id: Optional[str] = None
+    worker_secret: Optional[str] = None
     created_at: str
     updated_at: str
 

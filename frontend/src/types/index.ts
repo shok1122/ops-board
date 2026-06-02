@@ -2,8 +2,9 @@ export interface Server {
   id: string
   name: string
   host: string
-  has_worker_token: boolean
-  worker_token?: string
+  has_worker_credential: boolean
+  worker_id?: string
+  worker_secret?: string
   created_at: string
   updated_at: string
 }
@@ -11,7 +12,7 @@ export interface Server {
 export interface ServerCreate {
   name: string
   host: string
-  generate_worker_token?: boolean
+  generate_worker_credential?: boolean
 }
 
 export interface ServerStatus {

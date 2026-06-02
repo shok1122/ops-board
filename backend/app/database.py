@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     host TEXT NOT NULL,
-    worker_token TEXT,
+    worker_id TEXT UNIQUE,
+    worker_secret TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -109,12 +110,30 @@ async def init_db():
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     host TEXT NOT NULL,
-                    worker_token TEXT,
+                    worker_id TEXT UNIQUE,
+                    worker_secret TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
-                INSERT INTO servers_new (id, name, host, worker_token, created_at, updated_at)
-                SELECT id, name, host, worker_token, created_at, updated_at FROM servers;
+                INSERT INTO servers_new (id, name, host, worker_id, worker_secret, created_at, updated_at)
+                SELECT id, name, host, NULL, NULL, created_at, updated_at FROM servers;
+                DROP TABLE servers;
+                ALTER TABLE servers_new RENAME TO servers;
+            """)
+            await db.commit()
+        if "worker_token" in server_cols and "worker_id" not in server_cols:
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS servers_new (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    host TEXT NOT NULL,
+                    worker_id TEXT UNIQUE,
+                    worker_secret TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO servers_new (id, name, host, worker_id, worker_secret, created_at, updated_at)
+                SELECT id, name, host, NULL, NULL, created_at, updated_at FROM servers;
                 DROP TABLE servers;
                 ALTER TABLE servers_new RENAME TO servers;
             """)

@@ -7,16 +7,23 @@ from app.models import (
     ServerStatusOut, ServerJobResult, JobResultOutput, PagedResponse,
 )
 
+def _new_worker_id() -> str:
+    return "wkr_" + secrets.token_urlsafe(16)
+
+def _new_worker_secret() -> str:
+    return secrets.token_urlsafe(32)
+
 router = APIRouter(prefix="/servers", tags=["servers"])
 
 
-def _row_to_out(row, show_token: bool = False) -> ServerOut:
+def _row_to_out(row, show_secret: bool = False) -> ServerOut:
     return ServerOut(
         id=row["id"],
         name=row["name"],
         host=row["host"] or "",
-        has_worker_token=bool(row["worker_token"]),
-        worker_token=row["worker_token"] if show_token else None,
+        has_worker_credential=bool(row["worker_id"]),
+        worker_id=row["worker_id"] if show_secret else None,
+        worker_secret=row["worker_secret"] if show_secret else None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -35,17 +42,18 @@ async def list_servers():
 async def create_server(body: ServerCreate):
     now = now_iso()
     sid = new_id()
-    worker_token = secrets.token_urlsafe(32) if body.generate_worker_token else None
+    wid = _new_worker_id() if body.generate_worker_credential else None
+    wsecret = _new_worker_secret() if body.generate_worker_credential else None
     async with get_db() as db:
         await db.execute(
-            "INSERT INTO servers (id, name, host, worker_token, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (sid, body.name, body.host, worker_token, now, now),
+            "INSERT INTO servers (id, name, host, worker_id, worker_secret, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (sid, body.name, body.host, wid, wsecret, now, now),
         )
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (sid,))
         row = await cur.fetchone()
-    return _row_to_out(row, show_token=True)
+    return _row_to_out(row, show_secret=bool(body.generate_worker_credential))
 
 
 @router.get("/{server_id}", response_model=ServerOut)
@@ -70,8 +78,11 @@ async def update_server(server_id: str, body: ServerUpdate):
             updates["name"] = body.name
         if body.host is not None:
             updates["host"] = body.host
-        if body.regenerate_token:
-            updates["worker_token"] = secrets.token_urlsafe(32)
+        if body.regenerate_id:
+            updates["worker_id"] = _new_worker_id()
+            updates["worker_secret"] = _new_worker_secret()
+        elif body.regenerate_secret:
+            updates["worker_secret"] = _new_worker_secret()
         updates["updated_at"] = now_iso()
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -82,7 +93,8 @@ async def update_server(server_id: str, body: ServerUpdate):
         await db.commit()
         cur = await db.execute("SELECT * FROM servers WHERE id = ?", (server_id,))
         row = await cur.fetchone()
-    return _row_to_out(row, show_token=body.regenerate_token)
+    show = body.regenerate_id or body.regenerate_secret
+    return _row_to_out(row, show_secret=show)
 
 
 @router.delete("/{server_id}/worker-token", status_code=204)
@@ -92,7 +104,7 @@ async def revoke_worker_token(server_id: str):
         if not await cur.fetchone():
             raise HTTPException(404, "Server not found")
         await db.execute(
-            "UPDATE servers SET worker_token = NULL, updated_at = ? WHERE id = ?",
+            "UPDATE servers SET worker_id = NULL, worker_secret = NULL, updated_at = ? WHERE id = ?",
             (now_iso(), server_id),
         )
         await db.commit()

@@ -17,7 +17,7 @@ import { JobResultCard } from '../components/JobResultView'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
-const emptyForm: ServerCreate = { name: '', host: '', generate_worker_token: true }
+const emptyForm: ServerCreate = { name: '', host: '', generate_worker_credential: true }
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -272,12 +272,14 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['servers'] }); setConfirmRevoke(false) },
   })
 
+  const workerId = server.worker_id ?? ''
+
   const copyId = () => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(server.id)
+      navigator.clipboard.writeText(workerId)
     } else {
       const el = document.createElement('textarea')
-      el.value = server.id
+      el.value = workerId
       document.body.appendChild(el)
       el.select()
       document.execCommand('copy')
@@ -293,7 +295,7 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
         <KeyRound className="h-4 w-4" />
         ワーカー接続情報
       </div>
-      {server.has_worker_token ? (
+      {server.has_worker_credential ? (
         <>
           {status && <StatusSummary status={status} />}
           <div className="mt-2 flex items-center gap-2">
@@ -303,7 +305,7 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
               title="Worker IDをコピー"
             >
               {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-              <code className="font-mono">{server.id.slice(0, 8)}…</code>
+              <code className="font-mono">{workerId.slice(0, 12)}…</code>
             </button>
             {confirmRevoke ? (
               <span className="flex items-center gap-1 ml-auto">
@@ -331,7 +333,7 @@ function WorkerCredentials({ server, status }: { server: ServerType; status?: Se
           <WorkerReports serverId={server.id} />
         </>
       ) : (
-        <p className="text-sm text-gray-400">ワーカートークンが未設定です。サーバ編集からトークンを生成できます。</p>
+        <p className="text-sm text-gray-400">ワーカー認証情報が未設定です。サーバ編集から生成できます。</p>
       )}
     </div>
   )
@@ -365,8 +367,8 @@ export default function Servers() {
   const { data, isLoading } = useQuery({ queryKey: ['servers'], queryFn: getServers })
   const [modal, setModal] = useState<{ open: boolean; editing?: ServerType }>({ open: false })
   const [form, setForm] = useState<ServerCreate>(emptyForm)
-  const [regenOnEdit, setRegenOnEdit] = useState(false)
-  const [newServerToken, setNewServerToken] = useState<{ id: string; name: string; token: string } | null>(null)
+  const [regenMode, setRegenMode] = useState<'none' | 'secret' | 'id'>('none')
+  const [newServerToken, setNewServerToken] = useState<{ name: string; worker_id: string; worker_secret: string } | null>(null)
   const [statusData, setStatusData] = useState<Record<string, { data?: ServerStatus }>>({})
   const { data: latestStatuses } = useQuery({
     queryKey: ['server-statuses'],
@@ -390,18 +392,18 @@ export default function Servers() {
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ['servers'] })
       closeModal()
-      if (created.worker_token) {
-        setNewServerToken({ id: created.id, name: created.name, token: created.worker_token })
+      if (created.worker_id && created.worker_secret) {
+        setNewServerToken({ name: created.name, worker_id: created.worker_id, worker_secret: created.worker_secret })
       }
     },
   })
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ServerCreate> & { regenerate_token?: boolean } }) => updateServer(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<ServerCreate> & { regenerate_id?: boolean; regenerate_secret?: boolean } }) => updateServer(id, data),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['servers'] })
       closeModal()
-      if (updated.worker_token) {
-        setNewServerToken({ id: updated.id, name: updated.name, token: updated.worker_token })
+      if (updated.worker_id && updated.worker_secret) {
+        setNewServerToken({ name: updated.name, worker_id: updated.worker_id, worker_secret: updated.worker_secret })
       }
     },
   })
@@ -413,7 +415,7 @@ export default function Servers() {
   const openCreate = () => { setForm(emptyForm); setModal({ open: true }) }
   const openEdit = (s: ServerType) => {
     setForm({ name: s.name, host: s.host })
-    setRegenOnEdit(false)
+    setRegenMode('none')
     setModal({ open: true, editing: s })
   }
   const closeModal = () => setModal({ open: false })
@@ -421,7 +423,14 @@ export default function Servers() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (modal.editing) {
-      updateMut.mutate({ id: modal.editing.id, data: { ...form, regenerate_token: regenOnEdit } })
+      updateMut.mutate({
+        id: modal.editing.id,
+        data: {
+          ...form,
+          regenerate_id: regenMode === 'id',
+          regenerate_secret: regenMode === 'secret',
+        },
+      })
     } else {
       createMut.mutate(form)
     }
@@ -512,22 +521,24 @@ export default function Servers() {
                 <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    checked={form.generate_worker_token ?? true}
-                    onChange={e => setForm(f => ({ ...f, generate_worker_token: e.target.checked }))}
+                    checked={form.generate_worker_credential ?? true}
+                    onChange={e => setForm(f => ({ ...f, generate_worker_credential: e.target.checked }))}
                     className="rounded border-gray-300 text-indigo-600"
                   />
-                  ワーカートークンを生成する
+                  ワーカー認証情報を生成する
                 </label>
               ) : (
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={regenOnEdit}
-                    onChange={e => setRegenOnEdit(e.target.checked)}
-                    className="rounded border-gray-300 text-indigo-600"
-                  />
-                  ワーカートークンを再生成する
-                </label>
+                <Field label="認証情報の再生成">
+                  <select
+                    value={regenMode}
+                    onChange={e => setRegenMode(e.target.value as 'none' | 'secret' | 'id')}
+                    className="input text-xs"
+                  >
+                    <option value="none">再生成しない</option>
+                    <option value="secret">シークレットのみ再生成 (IDは変更しない)</option>
+                    <option value="id">IDとシークレットを再生成</option>
+                  </select>
+                </Field>
               )}
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary">キャンセル</button>
@@ -540,7 +551,7 @@ export default function Servers() {
         </div>
       )}
 
-      {/* Worker token reveal Modal */}
+      {/* Worker credential reveal Modal */}
       {newServerToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
@@ -550,18 +561,21 @@ export default function Servers() {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-gray-600">
-                <span className="font-medium text-gray-800">{newServerToken.name}</span> のワーカートークンです。
+                <span className="font-medium text-gray-800">{newServerToken.name}</span> のワーカー認証情報です。
                 ops-worker の設定ファイルに記入してください。
               </p>
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                このトークンは今後表示されません。必ずコピーして保管してください。
+                シークレットは今後表示されません。必ずコピーして保管してください。
               </div>
 
               <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
-                <CredentialRow label="Worker ID" value={newServerToken.id} />
-                <CredentialRow label="Token" value={newServerToken.token} secret />
+                <CredentialRow label="Worker ID" value={newServerToken.worker_id} />
+                <CredentialRow label="Secret" value={newServerToken.worker_secret} secret />
                 <CredentialRow label="Endpoint" value={`${window.location.origin}/api/v1`} />
               </div>
+              <p className="text-xs text-gray-400">
+                ops-worker の設定では <code className="bg-gray-100 px-1 rounded">{'<Worker ID>:<Secret>'}</code> の形式でトークンを指定してください。
+              </p>
             </div>
             <div className="flex justify-end border-t border-gray-100 px-6 py-4">
               <button onClick={() => setNewServerToken(null)} className="btn-primary">
