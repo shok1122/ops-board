@@ -9,6 +9,8 @@ import type {
   Alert, AlertRule, AlertRuleCreate,
   JobTemplate,
   Script, ScriptCreate,
+  NotificationSettings, NotificationSettingsUpdate,
+  NotificationCheckResult, NotificationPreview,
 } from '../types'
 
 const TOKEN_KEY = 'opsboard_token'
@@ -140,6 +142,25 @@ export const getAlerts = (serverId?: string) =>
   api.get<Alert[]>('/alerts', {
     params: serverId ? { server_id: serverId } : undefined,
   }).then(r => r.data)
+
+// Teams 通知
+export const getNotificationSettings = () =>
+  api.get<NotificationSettings>('/notifications/teams').then(r => r.data)
+
+export const updateNotificationSettings = (data: NotificationSettingsUpdate) =>
+  api.put<NotificationSettings>('/notifications/teams', data).then(r => r.data)
+
+/** 通知の要否チェックを今すぐ実行する */
+export const runNotificationCheck = () =>
+  api.post<NotificationCheckResult>('/notifications/teams/check').then(r => r.data)
+
+/** 疎通確認用のテスト通知を送る */
+export const sendNotificationTest = () =>
+  api.post<NotificationCheckResult>('/notifications/teams/test').then(r => r.data)
+
+/** いま通知するとしたら送られる本文 */
+export const getNotificationPreview = () =>
+  api.get<NotificationPreview>('/notifications/teams/preview').then(r => r.data)
 
 // Job Templates
 export const getJobTemplates = () =>

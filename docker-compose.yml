@@ -9,6 +9,13 @@ services:
       - AUTH_MAX_ATTEMPTS=${AUTH_MAX_ATTEMPTS:-5}
       - AUTH_LOCKOUT_MINUTES=${AUTH_LOCKOUT_MINUTES:-15}
       - AUTH_TOKEN_EXPIRE_HOURS=${AUTH_TOKEN_EXPIRE_HOURS:-24}
+      # cron（ジョブ・通知チェック）の基準タイムゾーン
+      - TZ=${TZ:-UTC}
+      # ---- Teams 通知 ----
+      # 未設定の場合、通知機能は使えない状態になる
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL:-}
+      - TEAMS_TIMEOUT_SEC=${TEAMS_TIMEOUT_SEC:-10}
+      - TEAMS_DASHBOARD_URL=${TEAMS_DASHBOARD_URL:-}
     volumes:
       - backend-data:/data
     networks:

@@ -263,3 +263,59 @@ class AlertOut(BaseModel):
     matches: list[AlertMatch]
     since: Optional[str] = None
     evaluated_at: str
+
+
+# ── Teams Notification ───────────────────────────────────────────────────────
+
+# on_change: 発生／解消に変化があったときだけ通知する
+# always:    アラートが出ている間は毎回のチェックで通知する
+NotifyMode = Literal["on_change", "always"]
+
+
+class NotificationSettingsBase(BaseModel):
+    enabled: bool = False
+    # 通知の要否をチェックするタイミング（cron 5フィールド）
+    cron_expr: str = "*/30 * * * *"
+    # 通知対象の重大度
+    severities: list[AlertSeverity] = ["error", "warning"]
+    mode: NotifyMode = "on_change"
+    # アラートが解消したときに解消通知を送るか
+    notify_resolved: bool = True
+
+
+class NotificationSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    cron_expr: Optional[str] = None
+    severities: Optional[list[AlertSeverity]] = None
+    mode: Optional[NotifyMode] = None
+    notify_resolved: Optional[bool] = None
+
+
+class NotificationSettingsOut(NotificationSettingsBase):
+    # docker-compose で TEAMS_WEBHOOK_URL が設定されているか。
+    # False の場合は通知機能そのものが使えない
+    configured: bool
+    dashboard_url: Optional[str] = None
+    last_checked_at: Optional[str] = None
+    last_notified_at: Optional[str] = None
+    last_error: Optional[str] = None
+    # 次回チェック予定時刻（スケジュール登録されている場合のみ）
+    next_run_at: Optional[str] = None
+    updated_at: str
+
+
+class NotificationCheckResult(BaseModel):
+    """通知の要否チェックの結果。"""
+    sent: bool
+    reason: str
+    firing: int = 0
+    new: int = 0
+    resolved: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class NotificationPreview(BaseModel):
+    """いま通知するとしたら送られる本文。"""
+    firing: int
+    message: Optional[str] = None

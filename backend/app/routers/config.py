@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.alerts import dump_groups, parse_groups
 from app.database import get_db, new_id, now_iso
-from app.models import AlertConditionGroup, AlertSeverity
+from app.models import AlertConditionGroup, AlertSeverity, NotificationSettingsBase
+from app.notifications import dump_severities, load_settings
 from app.scheduler import reload_all_jobs, unschedule_job
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -43,6 +44,8 @@ class ConfigExport(BaseModel):
     servers: list[ServerExport]
     jobs: list[JobExport]
     alert_rules: list[AlertRuleExport] = []
+    # Teams 通知の運用設定（Webhook URL は docker-compose 側なので含まない）
+    notification: Optional[NotificationSettingsBase] = None
 
 
 @router.get("/export", response_model=ConfigExport)
@@ -54,6 +57,7 @@ async def export_config():
         job_rows = await cur.fetchall()
         cur = await db.execute("SELECT * FROM alert_rules ORDER BY created_at ASC")
         alert_rule_rows = await cur.fetchall()
+        notification = (await load_settings(db)).base
 
     servers = [
         ServerExport(id=r["id"], name=r["name"], host=r["host"])
@@ -89,7 +93,9 @@ async def export_config():
         for r in alert_rule_rows
     ]
 
-    return ConfigExport(servers=servers, jobs=jobs, alert_rules=alert_rules)
+    return ConfigExport(
+        servers=servers, jobs=jobs, alert_rules=alert_rules, notification=notification,
+    )
 
 
 @router.post("/import", status_code=200)
@@ -154,9 +160,23 @@ async def import_config(body: ConfigExport):
                 ),
             )
 
+        # 通知設定（指定がなければ現在の設定を維持する）
+        if body.notification is not None:
+            n = body.notification
+            await db.execute(
+                "UPDATE notification_settings SET enabled=?, cron_expr=?, severities=?, "
+                "mode=?, notify_resolved=?, updated_at=? WHERE id = 1",
+                (
+                    int(n.enabled), n.cron_expr, dump_severities(n.severities),
+                    n.mode, int(n.notify_resolved), now,
+                ),
+            )
+        # 設定を入れ替えたので、通知済みアラートの状態はリセットする
+        await db.execute("DELETE FROM notified_alerts")
+
         await db.commit()
 
-    # スケジューラを再ロード
+    # スケジューラを再ロード（通知チェックのスケジュールもここで貼り替わる）
     await reload_all_jobs()
 
     return {

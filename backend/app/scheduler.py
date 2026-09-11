@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-def _parse_cron(expr: str) -> Optional[CronTrigger]:
+def parse_cron(expr: str) -> Optional[CronTrigger]:
     """Parse a 5-field cron expression into a CronTrigger."""
     try:
         parts = expr.strip().split()
@@ -244,7 +244,7 @@ async def trigger_job_now(job_id: str) -> str:
 
 
 def schedule_job(job_id: str, cron_expr: str):
-    trigger = _parse_cron(cron_expr)
+    trigger = parse_cron(cron_expr)
     if not trigger:
         logger.warning("Invalid cron expr for job %s: %s", job_id, cron_expr)
         return
@@ -266,6 +266,64 @@ def unschedule_job(job_id: str):
     job_func_id = f"job_{job_id}"
     if scheduler.get_job(job_func_id):
         scheduler.remove_job(job_func_id)
+
+
+NOTIFY_JOB_ID = "_teams_notification"
+
+
+async def _run_notification_check():
+    """Run the Teams notification check (scheduled by the UI cron expression)."""
+    from app.notifications import run_check
+
+    try:
+        result = await run_check()
+        logger.info(
+            "Notification check: sent=%s reason=%s firing=%d",
+            result.sent, result.reason, result.firing,
+        )
+    except Exception as exc:
+        logger.error("Notification check failed: %s", exc)
+
+
+async def reload_notification_job():
+    """Re-register the notification check job from the settings stored in the DB."""
+    if scheduler.get_job(NOTIFY_JOB_ID):
+        scheduler.remove_job(NOTIFY_JOB_ID)
+
+    from app.notifications import load_settings, teams_configured
+
+    if not teams_configured():
+        logger.info("Teams notification is not configured; check job not scheduled")
+        return
+
+    async with get_db() as db:
+        conf = (await load_settings(db)).base
+
+    if not conf.enabled:
+        logger.info("Teams notification is disabled; check job not scheduled")
+        return
+
+    trigger = parse_cron(conf.cron_expr)
+    if not trigger:
+        logger.warning("Invalid cron expr for notification check: %s", conf.cron_expr)
+        return
+
+    scheduler.add_job(
+        _run_notification_check,
+        trigger=trigger,
+        id=NOTIFY_JOB_ID,
+        replace_existing=True,
+        misfire_grace_time=60,
+    )
+    logger.info("Scheduled notification check with cron %s", conf.cron_expr)
+
+
+def notification_next_run_at() -> Optional[str]:
+    """Next scheduled notification check time, if the job is registered."""
+    job = scheduler.get_job(NOTIFY_JOB_ID)
+    if job and job.next_run_time:
+        return job.next_run_time.isoformat()
+    return None
 
 
 async def _cleanup_stale_executions():
@@ -347,6 +405,8 @@ async def reload_all_jobs():
         replace_existing=True,
         misfire_grace_time=3600,
     )
+
+    await reload_notification_job()
 
     logger.info("Reloaded %d jobs from DB", len(rows))
 

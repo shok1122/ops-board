@@ -283,3 +283,48 @@ export interface Alert {
   since?: string | null
   evaluated_at: string
 }
+
+// ── Teams 通知 ───────────────────────────────────────────────────────────────
+
+/** on_change: 発生／解消に変化があったときだけ通知 / always: 発生中は毎回通知 */
+export type NotifyMode = 'on_change' | 'always'
+
+export interface NotificationSettings {
+  enabled: boolean
+  /** 通知の要否をチェックするタイミング（cron 5フィールド） */
+  cron_expr: string
+  severities: AlertSeverity[]
+  mode: NotifyMode
+  notify_resolved: boolean
+  /** docker-compose で Webhook URL が設定されているか。false なら通知機能は使えない */
+  configured: boolean
+  dashboard_url?: string | null
+  last_checked_at?: string | null
+  last_notified_at?: string | null
+  last_error?: string | null
+  next_run_at?: string | null
+  updated_at: string
+}
+
+export interface NotificationSettingsUpdate {
+  enabled?: boolean
+  cron_expr?: string
+  severities?: AlertSeverity[]
+  mode?: NotifyMode
+  notify_resolved?: boolean
+}
+
+export interface NotificationCheckResult {
+  sent: boolean
+  reason: string
+  firing: number
+  new: number
+  resolved: number
+  message?: string | null
+  error?: string | null
+}
+
+export interface NotificationPreview {
+  firing: number
+  message?: string | null
+}

@@ -23,7 +23,8 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts using AND/OR threshold conditions, surfaced on the dashboard |
 | Scripts Management | Create and edit shell scripts served to ops-worker via the API |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
-| Config Export / Import | Portable server, job and alert rule configuration via JSON files |
+| Teams Notification | Posts firing **Error** / **Warning** alerts to Microsoft Teams as plain text, on a cron schedule set from the Web UI |
+| Config Export / Import | Portable server, job, alert rule and notification configuration via JSON files |
 
 ## Docker Images
 
@@ -95,6 +96,10 @@ Configure via the `.env` file.
 | `AUTH_LOCKOUT_MINUTES` | `15` | Lockout duration (minutes) |
 | `AUTH_TOKEN_EXPIRE_HOURS` | `24` | Login token expiry (hours) |
 | `SERVER_STATUS_RETENTION_DAYS` | `7` | Days to retain server status history |
+| `TZ` | `UTC` | Timezone the cron expressions (jobs and notification checks) are evaluated in |
+| `TEAMS_WEBHOOK_URL` | _(empty)_ | Teams Incoming Webhook / Workflow URL. Leave empty to disable Teams notification entirely |
+| `TEAMS_TIMEOUT_SEC` | `10` | Webhook request timeout (seconds) |
+| `TEAMS_DASHBOARD_URL` | _(empty)_ | Dashboard URL included at the end of each notification (optional) |
 
 ## Authentication
 
@@ -205,6 +210,83 @@ later report crosses the threshold. The alert shows the measured value that trig
 Supported operators: `>`, `>=`, `<`, `<=`, `==`, `!=`.
 A condition whose metric is absent from the latest reports is treated as not satisfied.
 Alert rules are included in the configuration export / import.
+
+## Teams Notification
+
+Alerts shown on the dashboard — both **metric alerts** and **job result alerts** — can be posted to a
+Microsoft Teams channel as a plain text message (no cards or other Teams-specific decoration).
+
+### Setup
+
+The connection settings live in `docker-compose.yml` (i.e. the environment), **not** in the Web UI:
+
+```env
+# .env
+TEAMS_WEBHOOK_URL=https://prod-00.japaneast.logic.azure.com:443/workflows/...
+TEAMS_DASHBOARD_URL=https://opsboard.example.com/
+```
+
+```bash
+docker compose up -d
+```
+
+`TEAMS_WEBHOOK_URL` is optional. **When it is not set, the notification feature is unusable** — the
+scheduled check is never registered and the **Teams通知** screen says so. Everything else keeps working.
+
+The webhook receives a POST with the body `{"text": "<message>"}`, which both the classic
+Office 365 connector and a Power Automate "when a webhook request is received" workflow accept.
+
+### Settings (Web UI)
+
+Configured on the **Teams通知** screen.
+
+| Setting | Description |
+|---------|-------------|
+| Enabled | Turns the scheduled check on / off |
+| Schedule | **cron (5 fields)** — how often the need for a notification is checked. Evaluated in the `TZ` timezone |
+| Severities | Notify on `Error`, `Warning`, or both |
+| Frequency | `変化があったときだけ` (only when an alert appears or clears) or `チェックごとに毎回` (every check while any alert is firing) |
+| Notify on resolve | Also send a message when a firing alert clears |
+
+The screen also shows the last check / last notification time, the last error, a preview of the
+message that would be sent right now, and buttons to send a test notification or run the check
+immediately.
+
+### Notification Content
+
+```
+🚨 OpsBoard アラート通知
+発生中: 🔴 異常 1件 / 🟡 警告 1件
+
+🆕 🔴 異常: [web-01] メモリ使用率が高い
+　・メモリが逼迫しています
+　・memory.usage_percent 95.5 percent (>= 90)
+　・継続: 3時間12分
+
+🟡 警告: [web-01] 証明書チェック
+　・TLS 証明書: 12 days
+　・有効期限が近づいています
+
+✅ 解消したアラート
+　・異常: [db-01] バックアップ
+
+🔗 ダッシュボード: https://opsboard.example.com/
+```
+
+Newly fired alerts are marked 🆕. At most 20 alerts are listed per message; the rest are summarised
+as a count. When every alert has cleared, the message becomes `✅ OpsBoard アラート解消`.
+
+### How "whether to notify" is decided
+
+At each cron tick the currently firing alerts are compared with the set that was notified last time:
+
+- a new alert (or one whose severity changed) → notify
+- an alert that cleared → notify, if *notify on resolve* is enabled
+- nothing changed → **no notification** (unless frequency is `チェックごとに毎回`)
+- nothing firing and nothing cleared → no notification
+
+If sending fails, the error is shown on the screen and the same notification is retried at the next
+tick.
 
 ## Log Format
 
@@ -319,6 +401,12 @@ GET    /api/v1/alert-rules/{id}    Get alert rule
 PUT    /api/v1/alert-rules/{id}    Update alert rule
 DELETE /api/v1/alert-rules/{id}    Delete alert rule
 GET    /api/v1/alerts              List currently firing alerts (optional ?server_id={id})
+
+GET    /api/v1/notifications/teams          Get Teams notification settings
+PUT    /api/v1/notifications/teams          Update Teams notification settings
+POST   /api/v1/notifications/teams/check    Run the notification check now
+POST   /api/v1/notifications/teams/test     Send a test notification
+GET    /api/v1/notifications/teams/preview  Preview the message that would be sent
 
 GET    /api/v1/scripts              List scripts
 POST   /api/v1/scripts              Create script

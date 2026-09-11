@@ -116,6 +116,31 @@ CREATE TABLE IF NOT EXISTS alert_states (
     updated_at TEXT NOT NULL
 );
 
+-- Teams 通知の設定（Web 画面から編集する単一行）
+CREATE TABLE IF NOT EXISTS notification_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    cron_expr TEXT NOT NULL DEFAULT '*/30 * * * *',
+    severities TEXT NOT NULL DEFAULT 'error,warning',
+    mode TEXT NOT NULL DEFAULT 'on_change',
+    notify_resolved INTEGER NOT NULL DEFAULT 1,
+    last_checked_at TEXT,
+    last_notified_at TEXT,
+    last_error TEXT,
+    updated_at TEXT NOT NULL
+);
+
+-- 直前に通知済みのアラート（通知の要否を判定するための状態）
+-- ルール／ジョブが消えても解消通知を出せるよう、表示名も一緒に保持する
+CREATE TABLE IF NOT EXISTS notified_alerts (
+    alert_key TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    server_name TEXT,
+    title TEXT NOT NULL,
+    notified_at TEXT NOT NULL
+);
+
 """
 
 
@@ -123,6 +148,11 @@ async def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(_SCHEMA)
+        # 通知設定は常に 1 行だけ存在させる（値は列のデフォルトに任せる）
+        await db.execute(
+            "INSERT OR IGNORE INTO notification_settings (id, updated_at) VALUES (1, ?)",
+            (now_iso(),),
+        )
         await db.commit()
         # マイグレーション: servers を新スキーマ（SSH列削除）に再作成
         cur = await db.execute("PRAGMA table_info(servers)")

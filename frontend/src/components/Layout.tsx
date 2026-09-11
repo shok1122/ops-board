@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle, LogOut, Code2, Radio,
+  LayoutDashboard, Server, Calendar, History, Activity, Download, Upload, AlertTriangle, LogOut, Code2, Radio, Bell,
 } from 'lucide-react'
 import { exportConfig, importConfig } from '../api/client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ const nav = [
   { to: '/executions', label: '実行履歴', icon: History },
   { to: '/scripts', label: 'スクリプト', icon: Code2 },
   { to: '/worker-logs', label: 'ワーカーログ', icon: Radio },
+  { to: '/notifications', label: 'Teams通知', icon: Bell },
 ]
 
 export default function Layout() {
@@ -65,6 +66,7 @@ export default function Layout() {
         qc.invalidateQueries({ queryKey: ['jobs'] })
         qc.invalidateQueries({ queryKey: ['alert-rules'] })
         qc.invalidateQueries({ queryKey: ['alerts'] })
+        qc.invalidateQueries({ queryKey: ['notification-settings'] })
       } catch (err: unknown) {
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'インポートに失敗しました。'
         alert(`エラー: ${msg}`)
@@ -145,7 +147,7 @@ export default function Layout() {
               <h2 className="font-semibold text-gray-900">設定のインポート</h2>
             </div>
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
-              <p>JSON ファイルからサーバ・ジョブ・アラートルールの設定をインポートします。</p>
+              <p>JSON ファイルからサーバ・ジョブ・アラートルール・通知設定をインポートします。</p>
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="space-y-1">
@@ -186,6 +188,7 @@ export default function Layout() {
                 <li>サーバ接続情報（ホスト・ポート・ユーザー名）</li>
                 <li>ジョブ設定（スケジュール・コマンド等）</li>
                 <li>アラートルール（判定条件・重大度）</li>
+                <li>Teams 通知設定（チェックする cron・通知対象）</li>
               </ul>
               <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     auth_lockout_minutes: int = 15    # ロックアウト継続時間（分）
     auth_token_expire_hours: int = 24  # トークン有効期限（時間）
 
+    # Teams 通知設定（docker-compose で指定する）
+    # TEAMS_WEBHOOK_URL が空の場合は通知機能そのものが使えない
+    teams_webhook_url: str = ""
+    teams_timeout_sec: float = 10.0    # Webhook 送信のタイムアウト（秒）
+    teams_dashboard_url: str = ""      # 通知文に載せるダッシュボードの URL（任意）
+
     class Config:
         env_file = ".env"
 
