@@ -143,11 +143,7 @@ async def init_db():
         job_cols = [row[1] for row in await cur.fetchall()]
         if "execution_type" not in job_cols:
             await db.execute(
-                "ALTER TABLE jobs ADD COLUMN execution_type TEXT NOT NULL DEFAULT 'remote'"
-            )
-            await db.execute(
-                "UPDATE jobs SET execution_type = 'local' "
-                "WHERE server_id IN (SELECT id FROM servers WHERE server_type = 'local_execution')"
+                "ALTER TABLE jobs ADD COLUMN execution_type TEXT NOT NULL DEFAULT 'local'"
             )
             await db.commit()
 
