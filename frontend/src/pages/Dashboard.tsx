@@ -1,14 +1,22 @@
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, XCircle, Loader2, Calendar, TrendingUp, Plug, Copy, Check } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Calendar, TrendingUp, Plug, Copy, Check, AlertOctagon, AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
-import { getDashboardStats, getServers, getServerJobResults } from '../api/client'
+import { getDashboardStats, getServers, getServerJobResults, getAlerts } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import { JobResultCard } from '../components/JobResultView'
+import { AlertCard } from '../components/AlertCard'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
-function AlertJobResults() {
+function AlertsSection() {
+  // メトリクス判定によるアラート（Error / Warning）
+  const { data: metricAlerts = [], isLoading: alertsLoading } = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => getAlerts(),
+    refetchInterval: 30_000,
+  })
+
   const { data: servers, isLoading: serversLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: getServers,
@@ -22,7 +30,7 @@ function AlertJobResults() {
     })),
   })
 
-  const isLoading = serversLoading || jobResultQueries.some(q => q.isLoading)
+  const isLoading = alertsLoading || serversLoading || jobResultQueries.some(q => q.isLoading)
 
   const serverAlerts = (servers?.items ?? [])
     .map((s, i) => {
@@ -35,23 +43,53 @@ function AlertJobResults() {
     })
     .filter(x => x.alerts.length > 0)
 
+  const errorCount = metricAlerts.filter(a => a.severity === 'error').length
+  const warningCount = metricAlerts.length - errorCount
+  const isEmpty = metricAlerts.length === 0 && serverAlerts.length === 0
+
   return (
     <div className="mb-8">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">アラート</h2>
+      <div className="mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900">アラート</h2>
+        {errorCount > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">
+            <AlertOctagon className="h-3 w-3" /> 異常 {errorCount}
+          </span>
+        )}
+        {warningCount > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+            <AlertTriangle className="h-3 w-3" /> 警告 {warningCount}
+          </span>
+        )}
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-6">
           <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
         </div>
-      ) : serverAlerts.length === 0 ? (
+      ) : isEmpty ? (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-6 py-8 text-center">
           <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-400 mb-2" />
           <p className="text-sm text-gray-500">現在アラートはありません</p>
         </div>
       ) : (
         <div className="space-y-4">
+          {/* メトリクス判定によるアラート */}
+          {metricAlerts.length > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+              <p className="mb-3 text-sm font-medium text-gray-700">メトリクス監視</p>
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                {metricAlerts.map(a => (
+                  <AlertCard key={a.rule_id} alert={a} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ジョブ実行結果によるアラート */}
           {serverAlerts.map(({ server, alerts }) => (
             <div key={server.id} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">{server.name}</p>
+              <p className="text-sm font-medium text-gray-700 mb-3">{server.name}（ジョブ実行結果）</p>
               <div className="columns-1 sm:columns-2 lg:columns-3 gap-2">
                 {alerts.map(r => (
                   <div key={r.job_id} className="break-inside-avoid mb-2">
@@ -169,7 +207,7 @@ export default function Dashboard() {
 
       <WorkerEndpoints />
 
-      <AlertJobResults />
+      <AlertsSection />
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-8">

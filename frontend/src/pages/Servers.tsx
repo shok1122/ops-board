@@ -14,6 +14,7 @@ import {
 } from '../api/client'
 import type { Server as ServerType, ServerCreate, ServerStatus, WorkerCheck } from '../types'
 import { JobResultCard } from '../components/JobResultView'
+import AlertRules from '../components/AlertRules'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -491,6 +492,7 @@ export default function Servers() {
 
                 <div className="px-5 py-4 bg-gray-50/50">
                   <WorkerCredentials server={s} status={ss?.data} />
+                  <AlertRules serverId={s.id} />
                   <ServerJobResults serverId={s.id} />
                 </div>
               </div>

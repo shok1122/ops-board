@@ -20,9 +20,10 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Execution History | List all execution results. Filterable by status |
 | Log Viewer | NDJSON format shown as a structured table. Plain text displayed as-is |
 | Worker Monitoring | View latest check results (CPU, memory, disk, process, etc.) pushed by ops-worker |
+| Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts using AND/OR threshold conditions, surfaced on the dashboard |
 | Scripts Management | Create and edit shell scripts served to ops-worker via the API |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
-| Config Export / Import | Portable server and job configuration via JSON files |
+| Config Export / Import | Portable server, job and alert rule configuration via JSON files |
 
 ## Docker Images
 
@@ -141,6 +142,70 @@ POST /api/v1/ingest/health   Authorization: Bearer <worker_token>
 
 The worker_token is shown once when the server is created and can be regenerated from the server edit screen.
 
+## Metric Alerts
+
+Metrics pushed by ops-worker are evaluated against **alert rules** defined per server.
+A rule that fires appears in the **Alerts** panel on the dashboard — red for `Error`, amber for `Warning`.
+
+Rules are managed from the server card on the **Servers** screen.
+
+### Rule Structure
+
+| Field | Description |
+|-------|-------------|
+| Name | Label shown on the alert |
+| Severity | `Error` (red) or `Warning` (amber) |
+| Message | Optional note shown alongside the alert |
+| Conditions | Threshold comparisons combined with AND / OR |
+| Enabled | Disabled rules are never evaluated |
+
+A condition targets a metric by its `name` — an arbitrary string, typed freely (names already
+received from the server are offered as autocomplete suggestions). The optional **check name**
+restricts a condition to one report (the top-level `name` of the payload); leave it blank to match
+the metric in any check.
+
+### Combining Conditions
+
+Conditions live in groups: **within a group they are ANDed, and groups are ORed together**.
+
+```
+Group 1:  memory.usage_percent >= 90  AND  memory.available_bytes < 1073741824
+   OR
+Group 2:  cpu.load1 > 8
+```
+
+Any number of rules can be defined per server, so a metric can drive both a `Warning` rule and a
+stricter `Error` rule.
+
+### Example
+
+Given this report from ops-worker:
+
+```json
+{
+  "name": "memory",
+  "type": "memory",
+  "timestamp": "2026-05-21T10:00:00Z",
+  "status": "ok",
+  "message": "",
+  "metrics": [
+    { "name": "total_bytes",     "value": 17179869184, "unit": "bytes"   },
+    { "name": "used_bytes",      "value": 8589934592,  "unit": "bytes"   },
+    { "name": "available_bytes", "value": 8589934592,  "unit": "bytes"   },
+    { "name": "usage_percent",   "value": 50.0,        "unit": "percent" }
+  ],
+  "labels": {}
+}
+```
+
+a rule with the single condition `usage_percent >= 90` stays silent, and starts firing as soon as a
+later report crosses the threshold. The alert shows the measured value that triggered it
+(`memory.usage_percent 95 percent (>= 90)`) and how long it has been firing.
+
+Supported operators: `>`, `>=`, `<`, `<=`, `==`, `!=`.
+A condition whose metric is absent from the latest reports is treated as not satisfied.
+Alert rules are included in the configuration export / import.
+
 ## Log Format
 
 Use **NDJSON (one JSON object per line)** to enable structured log display.
@@ -247,6 +312,13 @@ DELETE /api/v1/executions/{id}      Delete execution
 
 GET    /api/v1/worker-checks        List latest worker check results
 GET    /api/v1/worker-checks?server_id={id}  Filter by server
+
+GET    /api/v1/alert-rules         List alert rules (optional ?server_id={id})
+POST   /api/v1/alert-rules         Create alert rule
+GET    /api/v1/alert-rules/{id}    Get alert rule
+PUT    /api/v1/alert-rules/{id}    Update alert rule
+DELETE /api/v1/alert-rules/{id}    Delete alert rule
+GET    /api/v1/alerts              List currently firing alerts (optional ?server_id={id})
 
 GET    /api/v1/scripts              List scripts
 POST   /api/v1/scripts              Create script

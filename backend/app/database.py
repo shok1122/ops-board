@@ -93,6 +93,29 @@ CREATE TABLE IF NOT EXISTS worker_ingest_logs (
 CREATE INDEX IF NOT EXISTS idx_worker_ingest_logs_server_id
     ON worker_ingest_logs (server_id, id DESC);
 
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'warning',
+    message TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    groups_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_rules_server_id
+    ON alert_rules (server_id);
+
+CREATE TABLE IF NOT EXISTS alert_states (
+    rule_id TEXT PRIMARY KEY REFERENCES alert_rules(id) ON DELETE CASCADE,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    firing INTEGER NOT NULL DEFAULT 0,
+    since TEXT,
+    updated_at TEXT NOT NULL
+);
+
 """
 
 

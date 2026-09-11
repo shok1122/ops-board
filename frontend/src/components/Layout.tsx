@@ -63,6 +63,8 @@ export default function Layout() {
         await importConfig(parsed)
         qc.invalidateQueries({ queryKey: ['servers'] })
         qc.invalidateQueries({ queryKey: ['jobs'] })
+        qc.invalidateQueries({ queryKey: ['alert-rules'] })
+        qc.invalidateQueries({ queryKey: ['alerts'] })
       } catch (err: unknown) {
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'インポートに失敗しました。'
         alert(`エラー: ${msg}`)
@@ -143,12 +145,12 @@ export default function Layout() {
               <h2 className="font-semibold text-gray-900">設定のインポート</h2>
             </div>
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
-              <p>JSON ファイルからサーバとジョブの設定をインポートします。</p>
+              <p>JSON ファイルからサーバ・ジョブ・アラートルールの設定をインポートします。</p>
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-medium">現在の設定はすべて削除されます</p>
-                  <p className="text-xs">現在登録されているサーバとジョブをすべて削除し、インポートした設定に置き換えます。この操作は元に戻せません。</p>
+                  <p className="text-xs">現在登録されているサーバ・ジョブ・アラートルールをすべて削除し、インポートした設定に置き換えます。この操作は元に戻せません。</p>
                 </div>
               </div>
             </div>
@@ -183,6 +185,7 @@ export default function Layout() {
               <ul className="list-disc list-inside space-y-1 text-gray-600">
                 <li>サーバ接続情報（ホスト・ポート・ユーザー名）</li>
                 <li>ジョブ設定（スケジュール・コマンド等）</li>
+                <li>アラートルール（判定条件・重大度）</li>
               </ul>
               <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

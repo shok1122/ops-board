@@ -220,3 +220,66 @@ export interface UnifiedScript {
   defaultTimeout?: number
   templateConfigFields?: JobTemplateConfigField[]
 }
+
+// ── Alerts ───────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = 'error' | 'warning'
+export type AlertOperator = '>' | '>=' | '<' | '<=' | '==' | '!='
+
+export interface AlertCondition {
+  /** メトリクスの name（任意の文字列） */
+  metric_name: string
+  operator: AlertOperator
+  threshold: number
+  /** 特定のチェック（レポートの name）に限定する場合に指定 */
+  check_name?: string | null
+}
+
+/** グループ内の条件は AND、グループ同士は OR で結合される */
+export interface AlertConditionGroup {
+  conditions: AlertCondition[]
+}
+
+export interface AlertRule {
+  id: string
+  server_id: string
+  server_name?: string
+  name: string
+  severity: AlertSeverity
+  message?: string | null
+  enabled: boolean
+  groups: AlertConditionGroup[]
+  created_at: string
+  updated_at: string
+}
+
+export interface AlertRuleCreate {
+  server_id: string
+  name: string
+  severity: AlertSeverity
+  message?: string | null
+  enabled: boolean
+  groups: AlertConditionGroup[]
+}
+
+export interface AlertMatch {
+  check_name: string
+  metric_name: string
+  value: number
+  unit?: string | null
+  operator: AlertOperator
+  threshold: number
+  reported_at: string
+}
+
+export interface Alert {
+  rule_id: string
+  rule_name: string
+  server_id: string
+  server_name?: string
+  severity: AlertSeverity
+  message?: string | null
+  matches: AlertMatch[]
+  since?: string | null
+  evaluated_at: string
+}

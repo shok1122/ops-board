@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+from app.alerts import refresh_alert_states
 from app.config import settings
 from app.database import get_db, now_iso
 
@@ -119,6 +120,8 @@ async def receive_report(
             )""",
             (server_id, server_id, settings.worker_log_retention),
         )
+        # 受信したメトリクスでアラートルールを再評価し、発火状態を更新する
+        await refresh_alert_states(db, server_id)
         await db.commit()
     logger.debug("Received report from %s: check=%s status=%s", body.hostname, body.result.name, body.result.status)
 

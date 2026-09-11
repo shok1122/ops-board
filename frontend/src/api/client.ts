@@ -6,6 +6,7 @@ import type {
   PagedResponse,
   WorkerCheck,
   WorkerIngestLog,
+  Alert, AlertRule, AlertRuleCreate,
   JobTemplate,
   Script, ScriptCreate,
 } from '../types'
@@ -117,6 +118,27 @@ export const deleteWorkerCheck = (serverId: string, checkName: string) =>
 export const getWorkerLogs = (serverId?: string, limit = 50) =>
   api.get<WorkerIngestLog[]>('/worker-logs', {
     params: { ...(serverId ? { server_id: serverId } : {}), limit },
+  }).then(r => r.data)
+
+// Alert Rules
+export const getAlertRules = (serverId?: string) =>
+  api.get<AlertRule[]>('/alert-rules', {
+    params: serverId ? { server_id: serverId } : undefined,
+  }).then(r => r.data)
+
+export const createAlertRule = (data: AlertRuleCreate) =>
+  api.post<AlertRule>('/alert-rules', data).then(r => r.data)
+
+export const updateAlertRule = (id: string, data: Partial<Omit<AlertRuleCreate, 'server_id'>>) =>
+  api.put<AlertRule>(`/alert-rules/${id}`, data).then(r => r.data)
+
+export const deleteAlertRule = (id: string) =>
+  api.delete(`/alert-rules/${id}`)
+
+// 発火中のアラート
+export const getAlerts = (serverId?: string) =>
+  api.get<Alert[]>('/alerts', {
+    params: serverId ? { server_id: serverId } : undefined,
   }).then(r => r.data)
 
 // Job Templates

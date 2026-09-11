@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Servers ──────────────────────────────────────────────────────────────────
@@ -174,3 +174,92 @@ class ScriptOut(BaseModel):
 class PagedResponse(BaseModel):
     items: list[Any]
     total: int
+
+
+# ── Alert Rules ──────────────────────────────────────────────────────────────
+
+AlertSeverity = Literal["error", "warning"]
+AlertOperator = Literal[">", ">=", "<", "<=", "==", "!="]
+
+
+class AlertCondition(BaseModel):
+    """メトリクス1件に対する閾値条件。"""
+    metric_name: str = Field(min_length=1)
+    operator: AlertOperator = ">"
+    threshold: float
+    # 特定チェック（レポートの name）に限定する場合に指定。None なら全チェックが対象
+    check_name: Optional[str] = None
+
+    @field_validator("metric_name")
+    @classmethod
+    def _strip_metric_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("metric_name must not be empty")
+        return v
+
+    @field_validator("check_name")
+    @classmethod
+    def _strip_check_name(cls, v: Optional[str]) -> Optional[str]:
+        return (v.strip() or None) if v else None
+
+
+class AlertConditionGroup(BaseModel):
+    """グループ内の条件は AND、グループ同士は OR で結合される。"""
+    conditions: list[AlertCondition] = Field(min_length=1)
+
+
+class AlertRuleBase(BaseModel):
+    name: str = Field(min_length=1)
+    severity: AlertSeverity = "warning"
+    message: Optional[str] = None
+    enabled: bool = True
+    groups: list[AlertConditionGroup] = Field(min_length=1)
+
+    @field_validator("message")
+    @classmethod
+    def _strip_message(cls, v: Optional[str]) -> Optional[str]:
+        return (v.strip() or None) if v else None
+
+
+class AlertRuleCreate(AlertRuleBase):
+    server_id: str
+
+
+class AlertRuleUpdate(BaseModel):
+    name: Optional[str] = None
+    severity: Optional[AlertSeverity] = None
+    message: Optional[str] = None
+    enabled: Optional[bool] = None
+    groups: Optional[list[AlertConditionGroup]] = None
+
+
+class AlertRuleOut(AlertRuleBase):
+    id: str
+    server_id: str
+    server_name: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class AlertMatch(BaseModel):
+    """発火の根拠となったメトリクスの実測値。"""
+    check_name: str
+    metric_name: str
+    value: float
+    unit: Optional[str] = None
+    operator: AlertOperator
+    threshold: float
+    reported_at: str
+
+
+class AlertOut(BaseModel):
+    rule_id: str
+    rule_name: str
+    server_id: str
+    server_name: Optional[str] = None
+    severity: AlertSeverity
+    message: Optional[str] = None
+    matches: list[AlertMatch]
+    since: Optional[str] = None
+    evaluated_at: str
