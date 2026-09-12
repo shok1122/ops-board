@@ -56,11 +56,12 @@ export function SeverityBadge({ severity }: { severity: AlertSeverity }) {
   )
 }
 
-/** 発火根拠となったメトリクスの実測値 */
+/** 発火根拠となった実測値（メトリクス／ジョブ結果） */
 function MatchChip({ match, severity }: { match: AlertMatch; severity: AlertSeverity }) {
   const s = SEVERITY_STYLES[severity]
   return (
     <span className={`inline-flex items-baseline gap-1.5 rounded-lg px-2 py-1 text-xs ${s.chip}`}>
+      {match.source === 'job' && <span className="opacity-50">ジョブ</span>}
       <span className="opacity-60">{match.check_name}.</span>
       <span className="font-medium">{match.metric_name}</span>
       <span className="font-semibold tabular-nums">{formatMetricValue(match.value)}</span>

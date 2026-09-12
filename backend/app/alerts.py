@@ -1,7 +1,10 @@
-"""メトリクスベースのアラート判定。
+"""閾値ベースのアラート判定。
 
-ops-worker から送られてくるチェック結果（worker_checks）の最新メトリクスに対して
-サーバごとに設定された alert_rules を評価し、Error / Warning のアラートを算出する。
+サーバごとに設定された alert_rules を最新の実測値に対して評価し、
+Error / Warning のアラートを算出する。判定に使える値は2種類ある。
+
+    metric: ops-worker から送られてくるチェック結果（worker_checks）のメトリクス
+    job:    ジョブ実行結果（executions の構造化出力）に含まれる数値
 
 判定式は「グループ内は AND、グループ同士は OR」の 2 階層で表現する。
     groups = [ {conditions: [A, B]}, {conditions: [C]} ]  →  (A AND B) OR C
@@ -17,9 +20,10 @@ import math
 from typing import Any, NamedTuple, Optional
 
 from app.database import now_iso
+from app.job_results import load_latest_results, numeric_fields, output_from_row
 from app.models import (
     SEVERITIES, AlertCondition, AlertConditionGroup, AlertMatch, AlertOut,
-    AlertRuleOut, AlertSeverity,
+    AlertRuleOut, AlertSeverity, AlertSource,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,8 +32,12 @@ _EPSILON = 1e-9
 
 
 class MetricSample(NamedTuple):
-    """あるサーバの最新レポートに含まれるメトリクス1件。"""
-    check_name: str
+    """あるサーバの最新の実測値1件。"""
+    source: AlertSource
+    # 条件との突き合わせに使う識別子（metric: チェック名 / job: ジョブID）
+    source_id: str
+    # 画面表示に使う名前（metric: チェック名 / job: ジョブ名）
+    source_name: str
     metric_name: str
     value: float
     unit: Optional[str]
@@ -120,13 +128,32 @@ def samples_from_check_row(row: Any) -> list[MetricSample]:
         if not name or not isinstance(value, (int, float)) or isinstance(value, bool):
             continue
         samples.append(MetricSample(
-            check_name=row["check_name"],
+            source="metric",
+            source_id=row["check_name"],
+            source_name=row["check_name"],
             metric_name=str(name),
             value=float(value),
             unit=m.get("unit") or None,
             reported_at=row["reported_at"],
         ))
     return samples
+
+
+def samples_from_job_row(row) -> list[MetricSample]:
+    """ジョブの最新実行1件から、閾値判定に使える数値を取り出す。"""
+    reported_at = row["finished_at"] or row["started_at"]
+    return [
+        MetricSample(
+            source="job",
+            source_id=row["job_id"],
+            source_name=row["job_name"],
+            metric_name=field.name,
+            value=field.value,
+            unit=field.unit,
+            reported_at=reported_at,
+        )
+        for field in numeric_fields(output_from_row(row))
+    ]
 
 
 def _match_condition(
@@ -140,13 +167,17 @@ def _match_condition(
     if threshold is None:
         return None
     for s in samples:
-        if s.metric_name != cond.metric_name:
+        if s.source != cond.source or s.metric_name != cond.metric_name:
             continue
-        if cond.check_name and s.check_name != cond.check_name:
+        if cond.source == "job":
+            if s.source_id != cond.job_id:
+                continue
+        elif cond.check_name and s.source_id != cond.check_name:
             continue
         if _compare(s.value, cond.operator, threshold):
             return AlertMatch(
-                check_name=s.check_name,
+                source=s.source,
+                check_name=s.source_name,
                 metric_name=s.metric_name,
                 value=s.value,
                 unit=s.unit,
@@ -206,6 +237,35 @@ async def load_metric_samples(db, server_id: Optional[str] = None) -> dict[str, 
     return by_server
 
 
+async def load_job_samples(db, server_id: Optional[str] = None) -> dict[str, list[MetricSample]]:
+    """サーバごとの、ジョブ最新実行の数値一覧を返す。"""
+    by_server: dict[str, list[MetricSample]] = {}
+    for row in await load_latest_results(db, server_id):
+        by_server.setdefault(row["server_id"], []).extend(samples_from_job_row(row))
+    return by_server
+
+
+async def load_samples(
+    db, rules: list[AlertRuleOut], server_id: Optional[str] = None
+) -> dict[str, list[MetricSample]]:
+    """ルールが実際に使っている種類の実測値だけを読み込む。
+
+    ワーカーのレポート受信ごとに評価が走るので、使っていない側は引かない。
+    """
+    sources = {
+        cond.source
+        for rule in rules if rule.enabled
+        for group in rule.groups for cond in group.conditions
+    }
+    by_server: dict[str, list[MetricSample]] = {}
+    for source, load in (("metric", load_metric_samples), ("job", load_job_samples)):
+        if source not in sources:
+            continue
+        for sid, samples in (await load(db, server_id)).items():
+            by_server.setdefault(sid, []).extend(samples)
+    return by_server
+
+
 def row_to_rule(row) -> AlertRuleOut:
     return AlertRuleOut(
         id=row["id"],
@@ -237,7 +297,7 @@ async def evaluate_alerts(db, server_id: Optional[str] = None) -> list[AlertOut]
     rules = await load_rules(db, server_id)
     if not rules:
         return []
-    samples_by_server = await load_metric_samples(db, server_id)
+    samples_by_server = await load_samples(db, rules, server_id)
 
     cur = await db.execute("SELECT rule_id, firing, severity, since FROM alert_states")
     states = {r["rule_id"]: r for r in await cur.fetchall()}
@@ -271,14 +331,14 @@ async def evaluate_alerts(db, server_id: Optional[str] = None) -> list[AlertOut]
 
 
 async def refresh_alert_states(db, server_id: str) -> None:
-    """レポート受信時に発火状態を更新する（継続開始時刻 since の記録用）。
+    """レポート受信時・ジョブ実行後に発火状態を更新する（継続開始時刻 since の記録用）。
 
     呼び出し側のトランザクションに参加するため、commit は行わない。
     """
     rules = await load_rules(db, server_id)
     if not rules:
         return
-    samples_by_server = await load_metric_samples(db, server_id)
+    samples_by_server = await load_samples(db, rules, server_id)
     samples = samples_by_server.get(server_id, [])
 
     cur = await db.execute(

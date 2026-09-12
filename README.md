@@ -20,7 +20,7 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Execution History | List all execution results. Filterable by status |
 | Log Viewer | NDJSON format shown as a structured table. Plain text displayed as-is |
 | Worker Monitoring | View latest check results (CPU, memory, disk, process, etc.) pushed by ops-worker |
-| Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts — each condition carries both thresholds as a set — surfaced on the dashboard |
+| Alerts | Per-server rules that turn pushed metrics **or job result values** into **Error** / **Warning** alerts — each condition carries both thresholds as a set — surfaced on the dashboard |
 | Scripts Management | Create and edit shell scripts served to ops-worker via the API |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
 | Teams Notification | Posts firing **Error** / **Warning** alerts to Microsoft Teams as an Adaptive Card, on a cron schedule set from the Web UI |
@@ -147,9 +147,9 @@ POST /api/v1/ingest/health   Authorization: Bearer <worker_token>
 
 The worker_token is shown once when the server is created and can be regenerated from the server edit screen.
 
-## Metric Alerts
+## Alerts
 
-Metrics pushed by ops-worker are evaluated against **alert rules** defined per server.
+Numbers reported for a server are evaluated against **alert rules** defined per server.
 A rule that fires appears in the **Alerts** panel on the dashboard — red for `Error`, amber for `Warning`.
 
 Rules are managed from the server card on the **Servers** screen.
@@ -163,10 +163,22 @@ Rules are managed from the server card on the **Servers** screen.
 | Conditions | Threshold comparisons combined with AND / OR, each carrying its `Error` and `Warning` thresholds |
 | Enabled | Disabled rules are never evaluated |
 
-A condition targets a metric by its `name` — an arbitrary string, typed freely (names already
+### Condition Sources
+
+Each condition picks where its number comes from. Both kinds can be mixed freely in one rule.
+
+| Source | Value judged | Target |
+|--------|--------------|--------|
+| `メトリクス` (metric) | The latest metrics pushed by ops-worker | Metric `name`, optionally narrowed to one **check name** |
+| `ジョブ結果` (job) | The latest execution of one job on this server | The **job**, plus the name of a value in its structured output |
+
+For a metric condition the metric `name` is an arbitrary string, typed freely (names already
 received from the server are offered as autocomplete suggestions). The optional **check name**
 restricts a condition to one report (the top-level `name` of the payload); leave it blank to match
 the metric in any check.
+
+For a job condition the target job is chosen from the jobs registered on that server, and the value
+is named the same way the job prints it (see [Job Result Conditions](#job-result-conditions)).
 
 ### Error and Warning Thresholds
 
@@ -231,10 +243,53 @@ Supported operators: `>`, `>=`, `<`, `<=`, `==`, `!=`.
 A condition whose metric is absent from the latest reports is treated as not satisfied.
 Alert rules are included in the configuration export / import.
 
+### Job Result Conditions
+
+A condition with the `ジョブ結果` source reads the **latest execution** of one job and compares a
+number from its structured output (the JSON the command prints on its last stdout line — see
+[job_result_schema.json](job_result_schema.json)). Given this output:
+
+```json
+{
+  "title": "ディスク使用量",
+  "status": "warn",
+  "value": 82,
+  "unit": "%",
+  "items": [
+    { "label": "/",     "value": "82", "unit": "%" },
+    { "label": "/data", "value": 45,   "unit": "%" }
+  ]
+}
+```
+
+three values can be judged, named as follows:
+
+| Name | Value |
+|------|-------|
+| `value` | the top-level `value` (`82`) |
+| `/` | the item labelled `/` (`82`) |
+| `/data` | the item labelled `/data` (`45`) |
+
+Values are read as numbers, so `"82"` and `82` are equivalent; an item whose value is not numeric
+(`"running"`, say) is skipped, and so is a job whose latest execution printed no structured output.
+In each case the condition is simply not satisfied.
+
+Alert states are re-evaluated as soon as a job finishes, so the duration shown on the alert starts at
+the run that crossed the threshold.
+
+This is independent of the **job result alerts** that the dashboard and Teams already derive from the
+output `status` (`error` / `warn`): those keep working as before, and a rule gives finer control —
+own thresholds, a `Warning` and `Error` level of your own choosing, and combination with metrics:
+
+```
+Group 1:  memory.usage_percent          >= (Error 95 / Warning 90)
+    AND   ディスク使用量./               >= (Error 90 / Warning 80)
+```
+
 ## Teams Notification
 
-Alerts shown on the dashboard — both **metric alerts** and **job result alerts** — can be posted to a
-Microsoft Teams channel as an **Adaptive Card**.
+Alerts shown on the dashboard — both those raised by **alert rules** and the **job result alerts**
+derived from the output `status` — can be posted to a Microsoft Teams channel as an **Adaptive Card**.
 
 ### Setup
 

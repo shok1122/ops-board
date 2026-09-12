@@ -180,6 +180,10 @@ class PagedResponse(BaseModel):
 
 AlertSeverity = Literal["error", "warning"]
 AlertOperator = Literal[">", ">=", "<", "<=", "==", "!="]
+# 判定に使う値の出どころ
+#   metric: ops-worker から届いたチェック結果のメトリクス
+#   job:    ジョブ実行結果（構造化出力）の数値
+AlertSource = Literal["metric", "job"]
 
 SEVERITIES: tuple[AlertSeverity, ...] = ("error", "warning")
 
@@ -188,17 +192,28 @@ _ORDERED_OPERATORS: dict[str, int] = {">": 1, ">=": 1, "<": -1, "<=": -1}
 
 
 class AlertCondition(BaseModel):
-    """メトリクス1件に対する閾値条件。Error / Warning の閾値をセットで持つ。
+    """値1件に対する閾値条件。Error / Warning の閾値をセットで持つ。
 
     例: usage_percent >= の Error 90 / Warning 80。
     片方だけの指定も可能で、閾値の無いレベルはこの条件では判定されない。
+
+    判定する値は source で選ぶ。
+      source="metric": ops-worker のメトリクス。metric_name はメトリクス名、
+                       check_name を指定するとそのチェックに限定する。
+      source="job":    ジョブ実行結果の数値。job_id で対象ジョブを指定し、
+                       metric_name には出力の項目名（トップレベルの値なら "value"、
+                       items の値ならそのラベル）を入れる。
     """
+    source: AlertSource = "metric"
     metric_name: str = Field(min_length=1)
     operator: AlertOperator = ">"
     error_threshold: Optional[float] = None
     warning_threshold: Optional[float] = None
-    # 特定チェック（レポートの name）に限定する場合に指定。None なら全チェックが対象
+    # source="metric" 用。特定チェック（レポートの name）に限定する場合に指定。
+    # None なら全チェックが対象
     check_name: Optional[str] = None
+    # source="job" 用。対象ジョブの id（必須）
+    job_id: Optional[str] = None
 
     @field_validator("metric_name")
     @classmethod
@@ -208,10 +223,21 @@ class AlertCondition(BaseModel):
             raise ValueError("metric_name must not be empty")
         return v
 
-    @field_validator("check_name")
+    @field_validator("check_name", "job_id")
     @classmethod
-    def _strip_check_name(cls, v: Optional[str]) -> Optional[str]:
+    def _strip_optional(cls, v: Optional[str]) -> Optional[str]:
         return (v.strip() or None) if v else None
+
+    @model_validator(mode="after")
+    def _validate_source(self) -> "AlertCondition":
+        """出どころに応じて、使わない側の指定は落としておく。"""
+        if self.source == "job":
+            if not self.job_id:
+                raise ValueError("job_id is required when source is 'job'")
+            self.check_name = None
+        else:
+            self.job_id = None
+        return self
 
     @model_validator(mode="after")
     def _validate_thresholds(self) -> "AlertCondition":
@@ -290,7 +316,9 @@ class AlertRuleOut(AlertRuleBase):
 
 
 class AlertMatch(BaseModel):
-    """発火の根拠となったメトリクスの実測値。"""
+    """発火の根拠となった実測値。"""
+    source: AlertSource = "metric"
+    # 値の出どころの表示名（source="metric" ならチェック名、source="job" ならジョブ名）
     check_name: str
     metric_name: str
     value: float

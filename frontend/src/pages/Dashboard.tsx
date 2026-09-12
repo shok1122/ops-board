@@ -10,7 +10,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
 function AlertsSection() {
-  // メトリクス判定によるアラート（Error / Warning）
+  // アラートルールによる判定（メトリクス／ジョブ結果の閾値）
   const { data: metricAlerts = [], isLoading: alertsLoading } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => getAlerts(),
@@ -74,10 +74,10 @@ function AlertsSection() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* メトリクス判定によるアラート */}
+          {/* アラートルールによる判定 */}
           {metricAlerts.length > 0 && (
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-              <p className="mb-3 text-sm font-medium text-gray-700">メトリクス監視</p>
+              <p className="mb-3 text-sm font-medium text-gray-700">アラートルール</p>
               <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                 {metricAlerts.map(a => (
                   <AlertCard key={a.rule_id} alert={a} />

@@ -225,16 +225,21 @@ export interface UnifiedScript {
 
 export type AlertSeverity = 'error' | 'warning'
 export type AlertOperator = '>' | '>=' | '<' | '<=' | '==' | '!='
+/** 判定に使う値の出どころ（metric: ワーカーのメトリクス / job: ジョブ実行結果の数値） */
+export type AlertSource = 'metric' | 'job'
 
 export interface AlertCondition {
-  /** メトリクスの name（任意の文字列） */
+  source: AlertSource
+  /** metric: メトリクスの name / job: 出力の項目名（トップレベルの値なら "value"、items ならそのラベル） */
   metric_name: string
   operator: AlertOperator
   /** Error / Warning の閾値。片方だけの指定も可（未指定のレベルは判定されない） */
   error_threshold?: number | null
   warning_threshold?: number | null
-  /** 特定のチェック（レポートの name）に限定する場合に指定 */
+  /** source='metric' 用。特定のチェック（レポートの name）に限定する場合に指定 */
   check_name?: string | null
+  /** source='job' 用。対象ジョブの id */
+  job_id?: string | null
 }
 
 /** グループ内の条件は AND、グループ同士は OR で結合される */
@@ -263,6 +268,8 @@ export interface AlertRuleCreate {
 }
 
 export interface AlertMatch {
+  source: AlertSource
+  /** 値の出どころの表示名（metric: チェック名 / job: ジョブ名） */
   check_name: string
   metric_name: string
   value: number

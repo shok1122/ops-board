@@ -2,16 +2,37 @@ import React, { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellRing, Pencil, Plus, Trash2, X } from 'lucide-react'
 import {
-  createAlertRule, deleteAlertRule, getAlertRules, getAlerts, getWorkerChecks, updateAlertRule,
+  createAlertRule, deleteAlertRule, getAlertRules, getAlerts, getJobs, getServerJobResults,
+  getWorkerChecks, updateAlertRule,
 } from '../api/client'
 import type {
-  Alert, AlertCondition, AlertConditionGroup, AlertOperator, AlertRule, AlertSeverity,
+  Alert, AlertCondition, AlertConditionGroup, AlertOperator, AlertRule, AlertSeverity, AlertSource,
+  JobResultOutput,
 } from '../types'
 import { SEVERITY_STYLES } from './AlertCard'
 
 const OPERATORS: AlertOperator[] = ['>', '>=', '<', '<=', '==', '!=']
 const SEVERITIES: AlertSeverity[] = ['error', 'warning']
 const SEVERITY_TEXT: Record<AlertSeverity, string> = { error: 'Error', warning: 'Warning' }
+const SOURCES: AlertSource[] = ['metric', 'job']
+const SOURCE_TEXT: Record<AlertSource, string> = { metric: 'メトリクス', job: 'ジョブ結果' }
+
+/** ジョブ出力のトップレベルの値を指す予約名（バックエンドの MAIN_VALUE_NAME と対応） */
+const JOB_MAIN_VALUE = 'value'
+
+/** 閾値判定に使えるのは数値（数値として読める文字列を含む）だけ */
+const isNumeric = (v: unknown): boolean =>
+  v != null && v !== '' && typeof v !== 'boolean' && !Number.isNaN(Number(v))
+
+/** ジョブの最新結果から、閾値判定に使える項目名を取り出す */
+function jobFieldNames(output?: JobResultOutput): string[] {
+  const names: string[] = []
+  if (isNumeric(output?.value)) names.push(JOB_MAIN_VALUE)
+  for (const item of output?.items ?? []) {
+    if (isNumeric(item.value)) names.push(item.label)
+  }
+  return Array.from(new Set(names))
+}
 
 /** 大小を比べる演算子と、Error の閾値が Warning より大きい(1)／小さい(-1)べき向き */
 const ORDERED_OPERATORS: Partial<Record<AlertOperator, 1 | -1>> = {
@@ -22,9 +43,17 @@ export function thresholdOf(c: AlertCondition, severity: AlertSeverity): number 
   return severity === 'error' ? c.error_threshold : c.warning_threshold
 }
 
+/** 条件が見ている値を「チェック名.メトリクス名」「ジョブ名.項目名」の形で表す */
+export function describeTarget(c: AlertCondition, jobNames?: Map<string, string>): string {
+  if (c.source === 'job') {
+    return `${jobNames?.get(c.job_id ?? '') ?? 'ジョブ'}.${c.metric_name}`
+  }
+  return c.check_name ? `${c.check_name}.${c.metric_name}` : c.metric_name
+}
+
 /** 指定レベルの判定式を「A かつ B または C」の形に整形する。閾値が無ければ null */
 export function describeGroups(
-  groups: AlertConditionGroup[], severity: AlertSeverity,
+  groups: AlertConditionGroup[], severity: AlertSeverity, jobNames?: Map<string, string>,
 ): string | null {
   const texts: string[] = []
   for (const g of groups) {
@@ -33,8 +62,7 @@ export function describeGroups(
       const threshold = thresholdOf(c, severity)
       // 閾値が無い条件を含むグループは、このレベルでは判定されない
       if (threshold == null) { parts.length = 0; break }
-      const target = c.check_name ? `${c.check_name}.${c.metric_name}` : c.metric_name
-      parts.push(`${target} ${c.operator} ${threshold}`)
+      parts.push(`${describeTarget(c, jobNames)} ${c.operator} ${threshold}`)
     }
     if (parts.length > 0) texts.push(parts.join(' かつ '))
   }
@@ -52,7 +80,11 @@ export function ruleSeverities(rule: AlertRule): AlertSeverity[] {
 // ── 編集フォーム ──────────────────────────────────────────────────────────────
 
 type ConditionForm = {
+  source: AlertSource
+  /** source='metric' 用 */
   check_name: string
+  /** source='job' 用 */
+  job_id: string
   metric_name: string
   operator: AlertOperator
   error_threshold: string
@@ -67,7 +99,8 @@ type RuleForm = {
 }
 
 const emptyCondition = (): ConditionForm => ({
-  check_name: '', metric_name: '', operator: '>', error_threshold: '', warning_threshold: '',
+  source: 'metric', check_name: '', job_id: '', metric_name: '',
+  operator: '>', error_threshold: '', warning_threshold: '',
 })
 
 const emptyForm = (): RuleForm => ({
@@ -83,7 +116,9 @@ const toForm = (rule: AlertRule): RuleForm => ({
   enabled: rule.enabled,
   groups: rule.groups.map(g => ({
     conditions: g.conditions.map(c => ({
+      source: c.source,
       check_name: c.check_name ?? '',
+      job_id: c.job_id ?? '',
       metric_name: c.metric_name,
       operator: c.operator,
       error_threshold: numberField(c.error_threshold),
@@ -152,6 +187,22 @@ function AlertRuleModal({
     [checks],
   )
 
+  // ジョブ実行結果を条件にする場合の対象ジョブと、その出力項目名の候補
+  const { data: jobs } = useQuery({
+    queryKey: ['jobs', serverId],
+    queryFn: () => getJobs(serverId),
+  })
+  const jobList = jobs?.items ?? []
+  const { data: jobResults = [] } = useQuery({
+    queryKey: ['server-job-results', serverId],
+    queryFn: () => getServerJobResults(serverId),
+  })
+  const fieldsByJob = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const r of jobResults) map[r.job_id] = jobFieldNames(r.output)
+    return map
+  }, [jobResults])
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['alert-rules', serverId] })
     qc.invalidateQueries({ queryKey: ['alerts'] })
@@ -200,9 +251,14 @@ function AlertRuleModal({
     for (const g of form.groups) {
       const conditions: AlertCondition[] = []
       for (const c of g.conditions) {
+        const isJob = c.source === 'job'
         const metricName = c.metric_name.trim()
+        if (isJob && !c.job_id) {
+          setError('ジョブ結果の条件では、対象のジョブを選んでください')
+          return
+        }
         if (!metricName) {
-          setError('メトリクス名を入力してください')
+          setError(isJob ? '出力の項目名を入力してください' : 'メトリクス名を入力してください')
           return
         }
 
@@ -232,11 +288,13 @@ function AlertRuleModal({
         }
 
         conditions.push({
+          source: c.source,
           metric_name: metricName,
           operator: c.operator,
           error_threshold: thresholds.error,
           warning_threshold: thresholds.warning,
-          check_name: c.check_name.trim() || null,
+          check_name: isJob ? null : (c.check_name.trim() || null),
+          job_id: isJob ? c.job_id : null,
         })
       }
       if (conditions.length === 0) continue
@@ -303,6 +361,8 @@ function AlertRuleModal({
             <p className="mb-2 text-xs text-gray-400">
               条件ごとに Error / Warning の閾値をセットで指定します（例: 使用率 ≧ Error 90・Warning 80）。
               Error から先に判定し、空欄のレベルは判定しません。
+              判定に使う値は、ワーカーの<b className="font-medium">メトリクス</b>か、
+              ジョブ最新実行の<b className="font-medium">ジョブ結果</b>（出力の数値）から選べます。
             </p>
 
             <datalist id={`checks-${serverId}`}>
@@ -314,6 +374,11 @@ function AlertRuleModal({
             {checkNames.map((cn, i) => (
               <datalist key={cn} id={`metrics-${i}-${serverId}`}>
                 {(metricsByCheck[cn] ?? []).map(n => <option key={n} value={n} />)}
+              </datalist>
+            ))}
+            {Object.entries(fieldsByJob).map(([jobId, names]) => (
+              <datalist key={jobId} id={`job-fields-${jobId}`}>
+                {names.map(n => <option key={n} value={n} />)}
               </datalist>
             ))}
 
@@ -355,22 +420,64 @@ function AlertRuleModal({
                               <div className="py-0.5 pl-1 text-xs font-medium text-gray-400">かつ (AND)</div>
                             )}
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <input
-                                value={cond.check_name}
-                                onChange={e => updateCondition(gi, ci, { check_name: e.target.value })}
-                                list={`checks-${serverId}`}
-                                className="input w-32 py-1.5 text-xs"
-                                placeholder="チェック名(任意)"
-                                title="レポートの name。空欄なら全チェックが対象"
-                              />
-                              <input
-                                required
-                                value={cond.metric_name}
-                                onChange={e => updateCondition(gi, ci, { metric_name: e.target.value })}
-                                list={metricListId}
-                                className="input min-w-0 flex-1 py-1.5 text-xs"
-                                placeholder="メトリクス名 (例: usage_percent)"
-                              />
+                              <select
+                                value={cond.source}
+                                onChange={e => updateCondition(gi, ci, {
+                                  // 出どころが変わると対象の指定も意味が変わるので入れ直す
+                                  source: e.target.value as AlertSource,
+                                  check_name: '', job_id: '', metric_name: '',
+                                })}
+                                className="input w-24 py-1.5 text-xs"
+                                title="判定に使う値の出どころ"
+                              >
+                                {SOURCES.map(src => (
+                                  <option key={src} value={src}>{SOURCE_TEXT[src]}</option>
+                                ))}
+                              </select>
+                              {cond.source === 'job' ? (
+                                <>
+                                  <select
+                                    required
+                                    value={cond.job_id}
+                                    onChange={e => updateCondition(gi, ci, { job_id: e.target.value })}
+                                    className="input w-40 py-1.5 text-xs"
+                                    title="結果を判定に使うジョブ"
+                                  >
+                                    <option value="">ジョブを選択</option>
+                                    {jobList.map(j => (
+                                      <option key={j.id} value={j.id}>{j.name}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    required
+                                    value={cond.metric_name}
+                                    onChange={e => updateCondition(gi, ci, { metric_name: e.target.value })}
+                                    list={cond.job_id ? `job-fields-${cond.job_id}` : undefined}
+                                    className="input min-w-0 flex-1 py-1.5 text-xs"
+                                    placeholder={`項目名 (例: ${JOB_MAIN_VALUE})`}
+                                    title={`出力の項目名。トップレベルの値なら "${JOB_MAIN_VALUE}"、items ならそのラベル`}
+                                  />
+                                </>
+                              ) : (
+                                <>
+                                  <input
+                                    value={cond.check_name}
+                                    onChange={e => updateCondition(gi, ci, { check_name: e.target.value })}
+                                    list={`checks-${serverId}`}
+                                    className="input w-32 py-1.5 text-xs"
+                                    placeholder="チェック名(任意)"
+                                    title="レポートの name。空欄なら全チェックが対象"
+                                  />
+                                  <input
+                                    required
+                                    value={cond.metric_name}
+                                    onChange={e => updateCondition(gi, ci, { metric_name: e.target.value })}
+                                    list={metricListId}
+                                    className="input min-w-0 flex-1 py-1.5 text-xs"
+                                    placeholder="メトリクス名 (例: usage_percent)"
+                                  />
+                                </>
+                              )}
                               <select
                                 value={cond.operator}
                                 onChange={e => updateCondition(gi, ci, { operator: e.target.value as AlertOperator })}
@@ -454,10 +561,11 @@ function AlertRuleModal({
 // ── 一覧 ──────────────────────────────────────────────────────────────────────
 
 function AlertRuleRow({
-  rule, firing, onEdit, onDelete, deleting,
+  rule, firing, jobNames, onEdit, onDelete, deleting,
 }: {
   rule: AlertRule
   firing?: Alert
+  jobNames: Map<string, string>
   onEdit: () => void
   onDelete: () => void
   deleting: boolean
@@ -484,7 +592,7 @@ function AlertRuleRow({
           )}
         </div>
         {severities.map(sev => {
-          const desc = describeGroups(rule.groups, sev) ?? ''
+          const desc = describeGroups(rule.groups, sev, jobNames) ?? ''
           return (
             <div key={sev} className="flex items-baseline gap-1.5">
               <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ${SEVERITY_STYLES[sev].badge}`}>
@@ -533,10 +641,19 @@ export default function AlertRules({ serverId }: { serverId: string }) {
     queryFn: () => getAlerts(serverId),
     refetchInterval: 30_000,
   })
+  // ジョブ結果の条件を「ジョブ名.項目名」で表示するため
+  const { data: jobs } = useQuery({
+    queryKey: ['jobs', serverId],
+    queryFn: () => getJobs(serverId),
+  })
 
   const firingByRule = useMemo(
     () => new Map(alerts.map(a => [a.rule_id, a])),
     [alerts],
+  )
+  const jobNames = useMemo(
+    () => new Map((jobs?.items ?? []).map(j => [j.id, j.name])),
+    [jobs],
   )
 
   const deleteMut = useMutation({
@@ -567,7 +684,8 @@ export default function AlertRules({ serverId }: { serverId: string }) {
 
       {rules.length === 0 ? (
         <p className="text-sm text-gray-400">
-          メトリクスの閾値を Error / Warning のセットで決めて、アラートを出すルールを設定できます。
+          メトリクスやジョブ結果の閾値を Error / Warning のセットで決めて、
+          アラートを出すルールを設定できます。
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -576,6 +694,7 @@ export default function AlertRules({ serverId }: { serverId: string }) {
               key={r.id}
               rule={r}
               firing={firingByRule.get(r.id)}
+              jobNames={jobNames}
               onEdit={() => setModal({ open: true, rule: r })}
               onDelete={() => deleteMut.mutate(r.id)}
               deleting={deleteMut.isPending && deleteMut.variables === r.id}

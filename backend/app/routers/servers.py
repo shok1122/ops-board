@@ -1,10 +1,10 @@
-import json
 import secrets
 from fastapi import APIRouter, HTTPException
 from app.database import get_db, new_id, now_iso
+from app.job_results import load_latest_results, output_from_row
 from app.models import (
     ServerCreate, ServerUpdate, ServerOut,
-    ServerStatusOut, ServerJobResult, JobResultOutput, PagedResponse,
+    ServerStatusOut, ServerJobResult, PagedResponse,
 )
 
 def _new_worker_id() -> str:
@@ -173,48 +173,19 @@ async def get_server_job_results(server_id: str):
         if not await cur.fetchone():
             raise HTTPException(404, "Server not found")
 
-        cur = await db.execute(
-            "SELECT e.id, e.job_id, j.name AS job_name, e.status AS execution_status, "
-            "e.finished_at, e.stdout, e.stderr, e.parsed_result "
-            "FROM executions e "
-            "INNER JOIN jobs j ON e.job_id = j.id "
-            "INNER JOIN ("
-            "  SELECT job_id, MAX(started_at) AS latest "
-            "  FROM executions GROUP BY job_id"
-            ") latest ON e.job_id = latest.job_id AND e.started_at = latest.latest "
-            "WHERE j.server_id = ? "
-            "ORDER BY j.name",
-            (server_id,),
-        )
-        rows = await cur.fetchall()
+        rows = await load_latest_results(db, server_id)
 
     results = []
     for row in rows:
-        output = None
-        raw_stdout = row["stdout"]
-
-        if row["stdout"]:
-            lines = [line for line in row["stdout"].splitlines() if line.strip()]
-            if lines:
-                try:
-                    obj = json.loads(lines[-1])
-                    if isinstance(obj, dict):
-                        output = JobResultOutput(**{
-                            k: v for k, v in obj.items()
-                            if k in JobResultOutput.model_fields
-                        })
-                        raw_stdout = None
-                except (json.JSONDecodeError, Exception):
-                    pass
-
+        output = output_from_row(row)
         results.append(ServerJobResult(
             job_id=row["job_id"],
             job_name=row["job_name"],
-            execution_id=row["id"],
+            execution_id=row["execution_id"],
             execution_status=row["execution_status"],
             finished_at=row["finished_at"],
             output=output,
-            raw_stdout=raw_stdout,
+            raw_stdout=None if output else row["stdout"],
             stderr=row["stderr"] or None,
         ))
 

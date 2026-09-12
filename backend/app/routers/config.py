@@ -117,12 +117,24 @@ async def import_config(body: ConfigExport):
                 400,
                 f"Job '{job.name}' references unknown server_id '{job.server_id}'"
             )
+    jobs_by_id = {j.id: j for j in body.jobs}
     for rule in body.alert_rules:
         if rule.server_id not in server_ids:
             raise HTTPException(
                 400,
                 f"Alert rule '{rule.name}' references unknown server_id '{rule.server_id}'"
             )
+        # ジョブ実行結果の条件は、同じサーバのジョブを指していなければならない
+        for group in rule.groups:
+            for cond in group.conditions:
+                if cond.source != "job":
+                    continue
+                job = jobs_by_id.get(cond.job_id or "")
+                if job is None or job.server_id != rule.server_id:
+                    raise HTTPException(
+                        400,
+                        f"Alert rule '{rule.name}' references unknown job_id '{cond.job_id}'"
+                    )
 
     now = now_iso()
 

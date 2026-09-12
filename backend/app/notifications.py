@@ -9,19 +9,17 @@ TEAMS_WEBHOOK_URL が設定されていない場合、通知機能は使えな�
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 import httpx
 
 from app.alerts import evaluate_alerts
 from app.config import settings
 from app.database import now_iso
-from app.models import (
-    JobResultOutput, NotificationCheckResult, NotificationSettingsBase,
-)
+from app.job_results import load_latest_results, output_from_row
+from app.models import NotificationCheckResult, NotificationSettingsBase
 
 logger = logging.getLogger(__name__)
 
@@ -117,47 +115,15 @@ async def _collect_metric_items(db, severities: list[str]) -> list[NotifyItem]:
     return items
 
 
-def _parse_job_output(stdout: Optional[str]) -> Optional[JobResultOutput]:
-    """ジョブ標準出力の最後の非空行を JobResultOutput として解釈する。"""
-    if not stdout:
-        return None
-    lines = [line for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        obj: Any = json.loads(lines[-1])
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(obj, dict):
-        return None
-    try:
-        return JobResultOutput(**{
-            k: v for k, v in obj.items() if k in JobResultOutput.model_fields
-        })
-    except Exception:
-        return None
-
-
 async def _collect_job_items(db, severities: list[str]) -> list[NotifyItem]:
     """ジョブ実行結果によるアラート（ダッシュボードと同じ判定）を集める。
 
     出力の status が error / warn、または構造化出力が無く実行が失敗・タイムアウト
     した場合をアラートとして扱う。
     """
-    cur = await db.execute(
-        "SELECT j.id AS job_id, j.name AS job_name, s.name AS server_name, "
-        "e.status AS execution_status, e.stdout, e.stderr "
-        "FROM executions e "
-        "INNER JOIN jobs j ON e.job_id = j.id "
-        "INNER JOIN servers s ON j.server_id = s.id "
-        "INNER JOIN ("
-        "  SELECT job_id, MAX(started_at) AS latest FROM executions GROUP BY job_id"
-        ") latest ON e.job_id = latest.job_id AND e.started_at = latest.latest "
-        "ORDER BY s.name, j.name"
-    )
     items: list[NotifyItem] = []
-    for row in await cur.fetchall():
-        output = _parse_job_output(row["stdout"])
+    for row in await load_latest_results(db):
+        output = output_from_row(row)
         details: list[str] = []
         if output and output.status in ("error", "warn"):
             severity = "error" if output.status == "error" else "warning"

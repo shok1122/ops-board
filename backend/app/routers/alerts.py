@@ -4,9 +4,36 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.alerts import dump_groups, evaluate_alerts, load_rules, row_to_rule
 from app.database import get_db, new_id, now_iso
-from app.models import AlertOut, AlertRuleCreate, AlertRuleOut, AlertRuleUpdate
+from app.models import (
+    AlertConditionGroup, AlertOut, AlertRuleCreate, AlertRuleOut, AlertRuleUpdate,
+)
 
 router = APIRouter(tags=["alerts"])
+
+
+async def _validate_job_conditions(
+    db, server_id: str, groups: list[AlertConditionGroup]
+) -> None:
+    """ジョブ実行結果の条件が、同じサーバのジョブを指しているか確かめる。"""
+    job_ids = {
+        cond.job_id
+        for group in groups for cond in group.conditions
+        if cond.source == "job" and cond.job_id
+    }
+    if not job_ids:
+        return
+    placeholders = ",".join("?" * len(job_ids))
+    cur = await db.execute(
+        f"SELECT id FROM jobs WHERE server_id = ? AND id IN ({placeholders})",
+        (server_id, *job_ids),
+    )
+    missing = job_ids - {row["id"] for row in await cur.fetchall()}
+    if missing:
+        raise HTTPException(
+            400,
+            "Condition references a job that does not belong to this server: "
+            + ", ".join(sorted(missing)),
+        )
 
 
 # ── アラートルール ─────────────────────────────────────────────────────────────
@@ -25,6 +52,7 @@ async def create_alert_rule(body: AlertRuleCreate):
         cur = await db.execute("SELECT id FROM servers WHERE id = ?", (body.server_id,))
         if not await cur.fetchone():
             raise HTTPException(404, "Server not found")
+        await _validate_job_conditions(db, body.server_id, body.groups)
         await db.execute(
             "INSERT INTO alert_rules "
             "(id, server_id, name, message, enabled, groups_json, created_at, updated_at) "
@@ -47,7 +75,7 @@ async def get_alert_rule(rule_id: str):
 @router.put("/alert-rules/{rule_id}", response_model=AlertRuleOut)
 async def update_alert_rule(rule_id: str, body: AlertRuleUpdate):
     async with get_db() as db:
-        await _fetch_rule(db, rule_id)
+        rule = await _fetch_rule(db, rule_id)
 
         updates: dict = {}
         if body.name is not None:
@@ -60,6 +88,7 @@ async def update_alert_rule(rule_id: str, body: AlertRuleUpdate):
         if body.groups is not None:
             if not body.groups:
                 raise HTTPException(400, "At least one condition group is required")
+            await _validate_job_conditions(db, rule.server_id, body.groups)
             updates["groups_json"] = dump_groups(body.groups)
         updates["updated_at"] = now_iso()
 
