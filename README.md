@@ -23,7 +23,7 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts using AND/OR threshold conditions, surfaced on the dashboard |
 | Scripts Management | Create and edit shell scripts served to ops-worker via the API |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
-| Teams Notification | Posts firing **Error** / **Warning** alerts to Microsoft Teams as plain text, on a cron schedule set from the Web UI |
+| Teams Notification | Posts firing **Error** / **Warning** alerts to Microsoft Teams as an Adaptive Card, on a cron schedule set from the Web UI |
 | Config Export / Import | Portable server, job, alert rule and notification configuration via JSON files |
 
 ## Docker Images
@@ -214,7 +214,7 @@ Alert rules are included in the configuration export / import.
 ## Teams Notification
 
 Alerts shown on the dashboard — both **metric alerts** and **job result alerts** — can be posted to a
-Microsoft Teams channel as a plain text message (no cards or other Teams-specific decoration).
+Microsoft Teams channel as an **Adaptive Card**.
 
 ### Setup
 
@@ -233,8 +233,22 @@ docker compose up -d
 `TEAMS_WEBHOOK_URL` is optional. **When it is not set, the notification feature is unusable** — the
 scheduled check is never registered and the **Teams通知** screen says so. Everything else keeps working.
 
-The webhook receives a POST with the body `{"text": "<message>"}`, which both the classic
-Office 365 connector and a Power Automate "when a webhook request is received" workflow accept.
+The webhook receives a POST whose body wraps the Adaptive Card as a single attachment — the
+format both the classic Office 365 connector and a Power Automate "when a webhook request is
+received" workflow accept:
+
+```json
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "contentUrl": null,
+      "content": { "type": "AdaptiveCard", "version": "1.4", "body": [] }
+    }
+  ]
+}
+```
 
 ### Settings (Web UI)
 
@@ -248,11 +262,15 @@ Configured on the **Teams通知** screen.
 | Frequency | `変化があったときだけ` (only when an alert appears or clears) or `チェックごとに毎回` (every check while any alert is firing) |
 | Notify on resolve | Also send a message when a firing alert clears |
 
-The screen also shows the last check / last notification time, the last error, a preview of the
-message that would be sent right now, and buttons to send a test notification or run the check
+The screen also shows the last check / last notification time, the last error, a text preview of
+the card that would be sent right now, and buttons to send a test notification or run the check
 immediately.
 
 ### Notification Content
+
+The card carries a title and a count line, one block per alert (severity-coloured, `🆕` while the
+alert is new), a block for alerts that have cleared, and a **ダッシュボードを開く** button when
+`TEAMS_DASHBOARD_URL` is set. The same content as text:
 
 ```
 🚨 OpsBoard アラート通知

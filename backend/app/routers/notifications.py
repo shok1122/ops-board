@@ -12,8 +12,8 @@ from app.models import (
     NotificationSettingsUpdate,
 )
 from app.notifications import (
-    dump_severities, load_settings, preview_message, run_check,
-    send_teams_message, teams_configured,
+    build_test_notification, dump_severities, load_settings, preview_message,
+    run_check, send_teams_card, teams_configured,
 )
 from app.scheduler import notification_next_run_at, parse_cron, reload_notification_job
 
@@ -87,22 +87,16 @@ async def send_test():
     if not teams_configured():
         raise HTTPException(400, "Teams の Webhook URL が設定されていません")
 
-    lines = [
-        "🔔 OpsBoard テスト通知",
-        "この通知が届いていれば Teams への連携は正常です。",
-    ]
-    dashboard_url = settings.teams_dashboard_url.strip()
-    if dashboard_url:
-        lines.append(f"🔗 ダッシュボード: {dashboard_url}")
-    message = "\n\n".join(lines)
-
+    notification = build_test_notification()
     try:
-        await send_teams_message(message)
+        await send_teams_card(notification.card)
     except Exception as exc:
         return NotificationCheckResult(
-            sent=False, reason="error", message=message, error=str(exc)
+            sent=False, reason="error", message=notification.text, error=str(exc)
         )
-    return NotificationCheckResult(sent=True, reason="test", message=message)
+    return NotificationCheckResult(
+        sent=True, reason="test", message=notification.text
+    )
 
 
 @router.get("/teams/preview", response_model=NotificationPreview)

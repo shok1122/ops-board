@@ -4,8 +4,8 @@ Teams の接続情報（Webhook URL）は docker-compose で与える環境変�
 TEAMS_WEBHOOK_URL が設定されていない場合、通知機能は使えない状態になる。
 
 通知の要否をチェックするタイミングは Web 画面で cron 形式で指定し、
-スケジューラが各タイミングで run_check() を呼ぶ。通知文は装飾機能（Card 等）を
-使わないシンプルなテキストで、Incoming Webhook に {"text": ...} として POST する。
+スケジューラが各タイミングで run_check() を呼ぶ。通知は Adaptive Card（JSON）を
+組み立て、Incoming Webhook に添付ファイル1件のメッセージとして POST する。
 """
 from __future__ import annotations
 
@@ -200,21 +200,104 @@ async def collect_items(db, severities: list[str]) -> list[NotifyItem]:
     return items
 
 
-# ── 通知文の組み立て ──────────────────────────────────────────────────────────
+# ── 通知内容の組み立て ────────────────────────────────────────────────────────
+
+class Section(NamedTuple):
+    """通知1ブロック。Adaptive Card と画面表示用テキストの共通の材料にする。"""
+    heading: str
+    lines: list[str]
+    color: Optional[str] = None   # Adaptive Card の TextBlock color
+
+
+class Notification(NamedTuple):
+    """Teams に送る Adaptive Card と、画面表示・確認用のテキスト表現。"""
+    card: dict
+    text: str
+
+
+# 重大度 → Adaptive Card の色
+CARD_COLOR = {"error": "attention", "warning": "warning"}
+
 
 def _label(item: NotifyItem | ResolvedItem) -> str:
     server = f"[{item.server_name}] " if item.server_name else ""
     return f"{server}{item.title}"
 
 
-def build_message(
+def _build_card(
+    title: str,
+    subtitle: str,
+    color: Optional[str],
+    sections: list[Section],
+) -> dict:
+    """Teams に送る Adaptive Card 本体（attachment の content 部分）を組み立てる。"""
+    body: list[dict] = [{
+        "type": "TextBlock",
+        "text": title,
+        "wrap": True,
+        "weight": "Bolder",
+        "size": "Large",
+        **({"color": color} if color else {}),
+    }]
+    if subtitle:
+        body.append({
+            "type": "TextBlock", "text": subtitle, "wrap": True,
+            "spacing": "Small", "isSubtle": True,
+        })
+
+    for section in sections:
+        items: list[dict] = [{
+            "type": "TextBlock",
+            "text": section.heading,
+            "wrap": True,
+            "weight": "Bolder",
+            **({"color": section.color} if section.color else {}),
+        }]
+        items += [
+            {
+                "type": "TextBlock", "text": f"・{line}", "wrap": True,
+                "spacing": "None", "isSubtle": True,
+            }
+            for line in section.lines
+        ]
+        body.append({"type": "Container", "separator": True, "items": items})
+
+    card: dict = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    dashboard_url = settings.teams_dashboard_url.strip()
+    if dashboard_url:
+        card["actions"] = [{
+            "type": "Action.OpenUrl",
+            "title": "ダッシュボードを開く",
+            "url": dashboard_url,
+        }]
+    return card
+
+
+def _build_text(title: str, subtitle: str, sections: list[Section]) -> str:
+    """同じ内容を画面表示・ログ向けのテキストにする（送信には使わない）。"""
+    blocks = ["\n".join(filter(None, (title, subtitle)))]
+    for section in sections:
+        blocks.append("\n".join([
+            section.heading, *(f"　・{line}" for line in section.lines),
+        ]))
+    dashboard_url = settings.teams_dashboard_url.strip()
+    if dashboard_url:
+        blocks.append(f"🔗 ダッシュボード: {dashboard_url}")
+    return "\n\n".join(blocks)
+
+
+def build_notification(
     firing: list[NotifyItem],
     new_keys: set[str],
     resolved: list[ResolvedItem],
-) -> str:
-    """シンプルなテキストの通知文を作る（Card などの装飾は使わない）。"""
-    blocks: list[str] = []
-
+) -> Notification:
+    """アラートの状況から Adaptive Card と表示用テキストを作る。"""
     if firing:
         error_count = sum(1 for i in firing if i.severity == "error")
         warning_count = len(firing) - error_count
@@ -223,42 +306,73 @@ def build_message(
             counts.append(f"{SEVERITY_EMOJI['error']} 異常 {error_count}件")
         if warning_count:
             counts.append(f"{SEVERITY_EMOJI['warning']} 警告 {warning_count}件")
-        blocks.append("🚨 OpsBoard アラート通知\n発生中: " + " / ".join(counts))
+        title = "🚨 OpsBoard アラート通知"
+        subtitle = "発生中: " + " / ".join(counts)
+        color = "attention" if error_count else "warning"
     else:
-        blocks.append("✅ OpsBoard アラート解消\n発生中のアラートはありません。")
+        title = "✅ OpsBoard アラート解消"
+        subtitle = "発生中のアラートはありません。"
+        color = "good"
 
+    sections: list[Section] = []
     for item in firing[:MAX_ITEMS_PER_MESSAGE]:
         prefix = "🆕 " if item.key in new_keys else ""
-        head = (
-            f"{prefix}{SEVERITY_EMOJI[item.severity]} "
-            f"{SEVERITY_LABEL[item.severity]}: {_label(item)}"
-        )
-        blocks.append("\n".join([head, *(f"　・{d}" for d in item.details)]))
+        sections.append(Section(
+            heading=(
+                f"{prefix}{SEVERITY_EMOJI[item.severity]} "
+                f"{SEVERITY_LABEL[item.severity]}: {_label(item)}"
+            ),
+            lines=list(item.details),
+            color=CARD_COLOR[item.severity],
+        ))
 
     hidden = len(firing) - MAX_ITEMS_PER_MESSAGE
     if hidden > 0:
-        blocks.append(f"…ほか {hidden}件")
+        sections.append(Section(heading=f"…ほか {hidden}件", lines=[]))
 
     if resolved:
-        blocks.append("\n".join([
-            "✅ 解消したアラート",
-            *(f"　・{SEVERITY_LABEL[r.severity]}: {_label(r)}" for r in resolved),
-        ]))
+        sections.append(Section(
+            heading="✅ 解消したアラート",
+            lines=[f"{SEVERITY_LABEL[r.severity]}: {_label(r)}" for r in resolved],
+            color="good",
+        ))
 
-    dashboard_url = settings.teams_dashboard_url.strip()
-    if dashboard_url:
-        blocks.append(f"🔗 ダッシュボード: {dashboard_url}")
+    return Notification(
+        card=_build_card(title, subtitle, color, sections),
+        text=_build_text(title, subtitle, sections),
+    )
 
-    return "\n\n".join(blocks)
+
+def build_test_notification() -> Notification:
+    """疎通確認用のテスト通知を作る。"""
+    title = "🔔 OpsBoard テスト通知"
+    subtitle = "この通知が届いていれば Teams への連携は正常です。"
+    return Notification(
+        card=_build_card(title, subtitle, "good", []),
+        text=_build_text(title, subtitle, []),
+    )
 
 
-async def send_teams_message(text: str) -> None:
-    """Incoming Webhook にテキストを送る。失敗時は例外を投げる。"""
+async def send_teams_card(card: dict) -> None:
+    """Incoming Webhook に Adaptive Card を送る。失敗時は例外を投げる。
+
+    Teams は Adaptive Card を「添付ファイル1件のメッセージ」として受け取るので、
+    カード本体を attachments でくるんで POST する。この形式は従来の Office 365
+    コネクタでも Power Automate のワークフローでも受け付けられる。
+    """
     url = settings.teams_webhook_url.strip()
     if not url:
         raise RuntimeError("TEAMS_WEBHOOK_URL が設定されていません")
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "contentUrl": None,
+            "content": card,
+        }],
+    }
     async with httpx.AsyncClient(timeout=settings.teams_timeout_sec) as client:
-        resp = await client.post(url, json={"text": text})
+        resp = await client.post(url, json=payload)
     if resp.status_code >= 400:
         raise RuntimeError(
             f"Teams Webhook がエラーを返しました: {resp.status_code} {resp.text[:200]}"
@@ -394,9 +508,9 @@ async def run_check(force: bool = False) -> NotificationCheckResult:
             await db.commit()
             return result
 
-        message = build_message(firing, new_keys, report_resolved)
+        notification = build_notification(firing, new_keys, report_resolved)
         try:
-            await send_teams_message(message)
+            await send_teams_card(notification.card)
         except Exception as exc:
             logger.error("Teams notification failed: %s", exc)
             await db.execute(
@@ -406,7 +520,7 @@ async def run_check(force: bool = False) -> NotificationCheckResult:
             )
             await db.commit()
             return result.model_copy(update={
-                "reason": "error", "error": str(exc), "message": message,
+                "reason": "error", "error": str(exc), "message": notification.text,
             })
 
         await _replace_notified(db, firing, now)
@@ -422,7 +536,7 @@ async def run_check(force: bool = False) -> NotificationCheckResult:
         len(firing), len(new_keys), len(report_resolved),
     )
     return result.model_copy(update={
-        "sent": True, "reason": "sent", "message": message,
+        "sent": True, "reason": "sent", "message": notification.text,
     })
 
 
@@ -433,4 +547,4 @@ async def preview_message(db) -> tuple[int, Optional[str]]:
     firing = await collect_items(db, severities)
     if not firing:
         return 0, None
-    return len(firing), build_message(firing, set(), [])
+    return len(firing), build_notification(firing, set(), []).text
