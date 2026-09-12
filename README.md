@@ -281,6 +281,7 @@ Configured on the **Teams通知** screen.
 | Severities | Notify on `Error`, `Warning`, or both |
 | Frequency | `変化があったときだけ` (only when an alert appears or clears) or `チェックごとに毎回` (every check while any alert is firing) |
 | Notify on resolve | Also send a message when a firing alert clears |
+| Notify when clear | Also send an "異常なし" message at every check where nothing is firing |
 
 The screen also shows the last check / last notification time, the last error, a text preview of
 the card that would be sent right now, and buttons to send a test notification or run the check
@@ -312,7 +313,15 @@ alert is new), a block for alerts that have cleared, and a **ダッシュボー�
 ```
 
 Newly fired alerts are marked 🆕. At most 20 alerts are listed per message; the rest are summarised
-as a count. When every alert has cleared, the message becomes `✅ OpsBoard アラート解消`.
+as a count. When every alert has cleared, the message becomes `✅ OpsBoard アラート解消`; when
+nothing is firing and nothing cleared (the *notify when clear* message), it becomes:
+
+```
+✅ OpsBoard 異常なし
+発生中のアラートはありません。
+
+🔗 ダッシュボード: https://opsboard.example.com/
+```
 
 ### How "whether to notify" is decided
 
@@ -321,7 +330,8 @@ At each cron tick the currently firing alerts are compared with the set that was
 - a new alert (or one whose severity changed) → notify
 - an alert that cleared → notify, if *notify on resolve* is enabled
 - nothing changed → **no notification** (unless frequency is `チェックごとに毎回`)
-- nothing firing and nothing cleared → no notification
+- nothing firing and nothing cleared → notify "異常なし", if *notify when clear* is enabled
+  (every tick, regardless of the frequency setting); otherwise no notification
 
 If sending fails, the error is shown on the screen and the same notification is retried at the next
 tick.

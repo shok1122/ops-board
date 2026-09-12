@@ -58,6 +58,8 @@ async def update_teams_settings(body: NotificationSettingsUpdate):
         updates["mode"] = body.mode
     if body.notify_resolved is not None:
         updates["notify_resolved"] = int(body.notify_resolved)
+    if body.notify_no_alerts is not None:
+        updates["notify_no_alerts"] = int(body.notify_no_alerts)
     updates["updated_at"] = now_iso()
 
     set_clause = ", ".join(f"{k} = ?" for k in updates)

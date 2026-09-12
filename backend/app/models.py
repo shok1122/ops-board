@@ -328,6 +328,8 @@ class NotificationSettingsBase(BaseModel):
     mode: NotifyMode = "on_change"
     # アラートが解消したときに解消通知を送るか
     notify_resolved: bool = True
+    # アラートが1件も出ていないときも「異常なし」を通知するか（チェックのたびに送る）
+    notify_no_alerts: bool = True
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -336,6 +338,7 @@ class NotificationSettingsUpdate(BaseModel):
     severities: Optional[list[AlertSeverity]] = None
     mode: Optional[NotifyMode] = None
     notify_resolved: Optional[bool] = None
+    notify_no_alerts: Optional[bool] = None
 
 
 class NotificationSettingsOut(NotificationSettingsBase):

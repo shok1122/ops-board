@@ -309,8 +309,12 @@ def build_notification(
         title = "🚨 OpsBoard アラート通知"
         subtitle = "発生中: " + " / ".join(counts)
         color = "attention" if error_count else "warning"
-    else:
+    elif resolved:
         title = "✅ OpsBoard アラート解消"
+        subtitle = "発生中のアラートはありません。"
+        color = "good"
+    else:
+        title = "✅ OpsBoard 異常なし"
         subtitle = "発生中のアラートはありません。"
         color = "good"
 
@@ -407,6 +411,7 @@ async def load_settings(db) -> StoredSettings:
             severities=_parse_severities(row["severities"]),
             mode=row["mode"] if row["mode"] in ("on_change", "always") else "on_change",
             notify_resolved=bool(row["notify_resolved"]),
+            notify_no_alerts=bool(row["notify_no_alerts"]),
         ),
         last_checked_at=row["last_checked_at"],
         last_notified_at=row["last_notified_at"],
@@ -484,7 +489,7 @@ async def run_check(force: bool = False) -> NotificationCheckResult:
 
         should_send = bool(
             (firing and (conf.mode == "always" or new_keys or report_resolved))
-            or (not firing and report_resolved)
+            or (not firing and (report_resolved or conf.notify_no_alerts))
         )
 
         result = NotificationCheckResult(
@@ -541,10 +546,13 @@ async def run_check(force: bool = False) -> NotificationCheckResult:
 
 
 async def preview_message(db) -> tuple[int, Optional[str]]:
-    """現在のアラート内容で通知文を組み立てて返す（送信はしない）。"""
+    """現在のアラート内容で通知文を組み立てて返す（送信はしない）。
+
+    アラートが0件のときは、「異常なし」を通知する設定のときだけ本文を返す。
+    """
     stored = await load_settings(db)
     severities = stored.base.severities or ["error", "warning"]
     firing = await collect_items(db, severities)
-    if not firing:
+    if not firing and not stored.base.notify_no_alerts:
         return 0, None
     return len(firing), build_notification(firing, set(), []).text

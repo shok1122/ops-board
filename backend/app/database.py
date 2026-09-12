@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
     severities TEXT NOT NULL DEFAULT 'error,warning',
     mode TEXT NOT NULL DEFAULT 'on_change',
     notify_resolved INTEGER NOT NULL DEFAULT 1,
+    notify_no_alerts INTEGER NOT NULL DEFAULT 1,
     last_checked_at TEXT,
     last_notified_at TEXT,
     last_error TEXT,
@@ -193,6 +194,16 @@ async def init_db():
                 ALTER TABLE servers_new RENAME TO servers;
             """)
             await db.commit()
+        # マイグレーション: notification_settings に notify_no_alerts カラム追加
+        cur = await db.execute("PRAGMA table_info(notification_settings)")
+        notify_cols = [row[1] for row in await cur.fetchall()]
+        if "notify_no_alerts" not in notify_cols:
+            await db.execute(
+                "ALTER TABLE notification_settings "
+                "ADD COLUMN notify_no_alerts INTEGER NOT NULL DEFAULT 1"
+            )
+            await db.commit()
+
         # マイグレーション: jobs に execution_type カラム追加
         cur = await db.execute("PRAGMA table_info(jobs)")
         job_cols = [row[1] for row in await cur.fetchall()]

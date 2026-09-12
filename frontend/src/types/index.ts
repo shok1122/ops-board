@@ -296,6 +296,8 @@ export interface NotificationSettings {
   severities: AlertSeverity[]
   mode: NotifyMode
   notify_resolved: boolean
+  /** アラートが1件も出ていないときも「異常なし」を通知するか */
+  notify_no_alerts: boolean
   /** docker-compose で Webhook URL が設定されているか。false なら通知機能は使えない */
   configured: boolean
   dashboard_url?: string | null
@@ -312,6 +314,7 @@ export interface NotificationSettingsUpdate {
   severities?: AlertSeverity[]
   mode?: NotifyMode
   notify_resolved?: boolean
+  notify_no_alerts?: boolean
 }
 
 export interface NotificationCheckResult {

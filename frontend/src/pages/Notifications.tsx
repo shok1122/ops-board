@@ -55,6 +55,7 @@ type Form = {
   severities: AlertSeverity[]
   mode: NotifyMode
   notify_resolved: boolean
+  notify_no_alerts: boolean
 }
 
 const toForm = (s: NotificationSettings): Form => ({
@@ -63,6 +64,7 @@ const toForm = (s: NotificationSettings): Form => ({
   severities: s.severities,
   mode: s.mode,
   notify_resolved: s.notify_resolved,
+  notify_no_alerts: s.notify_no_alerts,
 })
 
 function formatTime(iso?: string | null) {
@@ -371,6 +373,21 @@ export default function Notifications() {
               <span className="text-sm text-gray-700">アラートが解消したことも通知する</span>
             </label>
 
+            <label className="flex cursor-pointer select-none items-start gap-2">
+              <input
+                type="checkbox"
+                checked={form.notify_no_alerts}
+                onChange={e => setForm(f => f && ({ ...f, notify_no_alerts: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
+              />
+              <span className="text-sm text-gray-700">
+                アラートが出ていないことも通知する
+                <span className="block text-xs text-gray-500">
+                  アラートが0件のときは、チェックのたびに「異常なし」を通知します
+                </span>
+              </span>
+            </label>
+
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 {error}
@@ -486,6 +503,10 @@ export default function Notifications() {
             ) : (
               <p className="py-2 text-center text-sm text-gray-400">
                 現在アラートは出ていないため、通知する内容はありません
+                <span className="mt-1 block text-xs">
+                  （「アラートが出ていないことも通知する」を有効にすると、
+                  この状態でも「異常なし」を通知します）
+                </span>
               </p>
             )}
           </Card>
