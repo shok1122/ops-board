@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 import aiosqlite
@@ -97,7 +98,6 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    severity TEXT NOT NULL DEFAULT 'warning',
     message TEXT,
     enabled INTEGER NOT NULL DEFAULT 1,
     groups_json TEXT NOT NULL,
@@ -112,6 +112,8 @@ CREATE TABLE IF NOT EXISTS alert_states (
     rule_id TEXT PRIMARY KEY REFERENCES alert_rules(id) ON DELETE CASCADE,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     firing INTEGER NOT NULL DEFAULT 0,
+    -- 発火中の重大度（'error' | 'warning'）。未発火なら NULL
+    severity TEXT,
     since TEXT,
     updated_at TEXT NOT NULL
 );
@@ -255,6 +257,58 @@ async def init_db():
                 FROM worker_checks;
                 DROP TABLE worker_checks;
                 ALTER TABLE worker_checks_new RENAME TO worker_checks;
+            """)
+            await db.commit()
+
+        # マイグレーション: alert_states に severity カラム追加
+        cur = await db.execute("PRAGMA table_info(alert_states)")
+        state_cols = [row[1] for row in await cur.fetchall()]
+        if "severity" not in state_cols:
+            await db.execute("ALTER TABLE alert_states ADD COLUMN severity TEXT")
+            await db.commit()
+
+        # マイグレーション: alert_rules のルール単位 severity を廃止し、
+        # 条件の閾値を Error / Warning のセットに移し替える
+        cur = await db.execute("PRAGMA table_info(alert_rules)")
+        rule_cols = [row[1] for row in await cur.fetchall()]
+        if "severity" in rule_cols:
+            # app.alerts は app.database を import するため、ここで遅延 import する
+            from app.alerts import upgrade_legacy_groups
+
+            cur = await db.execute("SELECT id, severity, groups_json FROM alert_rules")
+            for row in await cur.fetchall():
+                try:
+                    raw = json.loads(row[2])
+                except (TypeError, ValueError):
+                    continue
+                await db.execute(
+                    "UPDATE alert_rules SET groups_json = ? WHERE id = ?",
+                    (
+                        json.dumps(upgrade_legacy_groups(raw, row[1]), ensure_ascii=False),
+                        row[0],
+                    ),
+                )
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS alert_rules_new (
+                    id TEXT PRIMARY KEY,
+                    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    message TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    groups_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO alert_rules_new
+                    (id, server_id, name, message, enabled, groups_json, created_at, updated_at)
+                SELECT id, server_id, name, message, enabled, groups_json, created_at, updated_at
+                FROM alert_rules;
+                DROP TABLE alert_rules;
+                ALTER TABLE alert_rules_new RENAME TO alert_rules;
+                CREATE INDEX IF NOT EXISTS idx_alert_rules_server_id
+                    ON alert_rules (server_id);
+                -- 判定単位が変わるので、発火状態は作り直す
+                DELETE FROM alert_states;
             """)
             await db.commit()
 

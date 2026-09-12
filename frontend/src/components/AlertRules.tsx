@@ -7,22 +7,46 @@ import {
 import type {
   Alert, AlertCondition, AlertConditionGroup, AlertOperator, AlertRule, AlertSeverity,
 } from '../types'
-import { SEVERITY_STYLES, SeverityBadge } from './AlertCard'
+import { SEVERITY_STYLES } from './AlertCard'
 
 const OPERATORS: AlertOperator[] = ['>', '>=', '<', '<=', '==', '!=']
+const SEVERITIES: AlertSeverity[] = ['error', 'warning']
+const SEVERITY_TEXT: Record<AlertSeverity, string> = { error: 'Error', warning: 'Warning' }
 
-/** 判定式を「A かつ B または C」の形の日本語に整形する */
-export function describeGroups(groups: AlertConditionGroup[]): string {
-  const parts = groups.map(g => {
-    const text = g.conditions.map(describeCondition).join(' かつ ')
-    return groups.length > 1 && g.conditions.length > 1 ? `(${text})` : text
-  })
-  return parts.join(' または ')
+/** 大小を比べる演算子と、Error の閾値が Warning より大きい(1)／小さい(-1)べき向き */
+const ORDERED_OPERATORS: Partial<Record<AlertOperator, 1 | -1>> = {
+  '>': 1, '>=': 1, '<': -1, '<=': -1,
 }
 
-function describeCondition(c: AlertCondition): string {
-  const target = c.check_name ? `${c.check_name}.${c.metric_name}` : c.metric_name
-  return `${target} ${c.operator} ${c.threshold}`
+export function thresholdOf(c: AlertCondition, severity: AlertSeverity): number | null | undefined {
+  return severity === 'error' ? c.error_threshold : c.warning_threshold
+}
+
+/** 指定レベルの判定式を「A かつ B または C」の形に整形する。閾値が無ければ null */
+export function describeGroups(
+  groups: AlertConditionGroup[], severity: AlertSeverity,
+): string | null {
+  const texts: string[] = []
+  for (const g of groups) {
+    const parts: string[] = []
+    for (const c of g.conditions) {
+      const threshold = thresholdOf(c, severity)
+      // 閾値が無い条件を含むグループは、このレベルでは判定されない
+      if (threshold == null) { parts.length = 0; break }
+      const target = c.check_name ? `${c.check_name}.${c.metric_name}` : c.metric_name
+      parts.push(`${target} ${c.operator} ${threshold}`)
+    }
+    if (parts.length > 0) texts.push(parts.join(' かつ '))
+  }
+  if (texts.length === 0) return null
+  return texts
+    .map(t => (texts.length > 1 && t.includes(' かつ ') ? `(${t})` : t))
+    .join(' または ')
+}
+
+/** このルールが発火しうるレベル */
+export function ruleSeverities(rule: AlertRule): AlertSeverity[] {
+  return SEVERITIES.filter(sev => describeGroups(rule.groups, sev) !== null)
 }
 
 // ── 編集フォーム ──────────────────────────────────────────────────────────────
@@ -31,29 +55,30 @@ type ConditionForm = {
   check_name: string
   metric_name: string
   operator: AlertOperator
-  threshold: string
+  error_threshold: string
+  warning_threshold: string
 }
 
 type RuleForm = {
   name: string
-  severity: AlertSeverity
   message: string
   enabled: boolean
   groups: { conditions: ConditionForm[] }[]
 }
 
 const emptyCondition = (): ConditionForm => ({
-  check_name: '', metric_name: '', operator: '>', threshold: '',
+  check_name: '', metric_name: '', operator: '>', error_threshold: '', warning_threshold: '',
 })
 
 const emptyForm = (): RuleForm => ({
-  name: '', severity: 'warning', message: '', enabled: true,
+  name: '', message: '', enabled: true,
   groups: [{ conditions: [emptyCondition()] }],
 })
 
+const numberField = (v: number | null | undefined): string => (v == null ? '' : String(v))
+
 const toForm = (rule: AlertRule): RuleForm => ({
   name: rule.name,
-  severity: rule.severity,
   message: rule.message ?? '',
   enabled: rule.enabled,
   groups: rule.groups.map(g => ({
@@ -61,10 +86,39 @@ const toForm = (rule: AlertRule): RuleForm => ({
       check_name: c.check_name ?? '',
       metric_name: c.metric_name,
       operator: c.operator,
-      threshold: String(c.threshold),
+      error_threshold: numberField(c.error_threshold),
+      warning_threshold: numberField(c.warning_threshold),
     })),
   })),
 })
+
+/** Error / Warning それぞれの閾値入力 */
+function ThresholdInput({
+  severity, value, onChange,
+}: {
+  severity: AlertSeverity
+  value: string
+  onChange: (v: string) => void
+}) {
+  const tone = severity === 'error'
+    ? 'border-red-200 bg-red-50 focus-within:border-red-400'
+    : 'border-amber-200 bg-amber-50 focus-within:border-amber-400'
+  const labelTone = severity === 'error' ? 'text-red-600' : 'text-amber-700'
+  return (
+    <label className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 ${tone}`}>
+      <span className={`text-[10px] font-semibold ${labelTone}`}>{SEVERITY_TEXT[severity]}</span>
+      <input
+        type="number"
+        step="any"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-20 border-0 bg-transparent p-0 text-xs tabular-nums text-gray-800 outline-none placeholder:text-gray-400"
+        placeholder="—"
+        title={`${SEVERITY_TEXT[severity]} の閾値（空欄ならこのレベルは判定しない）`}
+      />
+    </label>
+  )
+}
 
 function AlertRuleModal({
   serverId, rule, onClose,
@@ -105,7 +159,7 @@ function AlertRuleModal({
 
   const saveMut = useMutation({
     mutationFn: (payload: {
-      name: string; severity: AlertSeverity; message: string | null
+      name: string; message: string | null
       enabled: boolean; groups: AlertConditionGroup[]
     }) => rule
       ? updateAlertRule(rule.id, payload)
@@ -151,19 +205,48 @@ function AlertRuleModal({
           setError('メトリクス名を入力してください')
           return
         }
-        const threshold = Number(c.threshold)
-        if (c.threshold.trim() === '' || Number.isNaN(threshold)) {
-          setError(`「${metricName}」の閾値には数値を入力してください`)
+
+        const thresholds: Record<AlertSeverity, number | null> = { error: null, warning: null }
+        for (const sev of SEVERITIES) {
+          const raw = (sev === 'error' ? c.error_threshold : c.warning_threshold).trim()
+          if (raw === '') continue
+          const value = Number(raw)
+          if (Number.isNaN(value)) {
+            setError(`「${metricName}」の ${SEVERITY_TEXT[sev]} 閾値には数値を入力してください`)
+            return
+          }
+          thresholds[sev] = value
+        }
+        if (thresholds.error == null && thresholds.warning == null) {
+          setError(`「${metricName}」に Error か Warning の閾値を入力してください`)
           return
         }
+
+        const direction = ORDERED_OPERATORS[c.operator]
+        if (direction && thresholds.error != null && thresholds.warning != null
+          && (thresholds.error - thresholds.warning) * direction < 0) {
+          setError(
+            `「${metricName}」の Error 閾値は Warning より${direction > 0 ? '大きい' : '小さい'}値にしてください`,
+          )
+          return
+        }
+
         conditions.push({
           metric_name: metricName,
           operator: c.operator,
-          threshold,
+          error_threshold: thresholds.error,
+          warning_threshold: thresholds.warning,
           check_name: c.check_name.trim() || null,
         })
       }
-      if (conditions.length > 0) groups.push({ conditions })
+      if (conditions.length === 0) continue
+
+      // AND でつなぐ条件は、同じレベルの閾値がそろっていないと判定できない
+      if (!SEVERITIES.some(sev => conditions.every(c => thresholdOf(c, sev) != null))) {
+        setError('AND でつなぐ条件には、Error か Warning のどちらかの閾値をすべてに入力してください')
+        return
+      }
+      groups.push({ conditions })
     }
     if (groups.length === 0) {
       setError('条件を1つ以上設定してください')
@@ -172,7 +255,6 @@ function AlertRuleModal({
 
     saveMut.mutate({
       name: form.name.trim(),
-      severity: form.severity,
       message: form.message.trim() || null,
       enabled: form.enabled,
       groups,
@@ -189,41 +271,15 @@ function AlertRuleModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">ルール名 *</label>
-              <input
-                required
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="input"
-                placeholder="メモリ使用率が高い"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">重大度 *</label>
-              <div className="flex gap-2">
-                {(['error', 'warning'] as AlertSeverity[]).map(sev => {
-                  const s = SEVERITY_STYLES[sev]
-                  const active = form.severity === sev
-                  return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, severity: sev }))}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                        active
-                          ? `${s.card} ${s.title} border-current/30 ring-2 ring-offset-1 ${sev === 'error' ? 'ring-red-300' : 'ring-amber-300'}`
-                          : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                      {sev === 'error' ? 'Error（異常）' : 'Warning（警告）'}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">ルール名 *</label>
+            <input
+              required
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="input"
+              placeholder="メモリ使用率が高い"
+            />
           </div>
 
           <div>
@@ -244,6 +300,10 @@ function AlertRuleModal({
                 グループ内は AND（かつ）、グループ同士は OR（または）で判定します
               </span>
             </div>
+            <p className="mb-2 text-xs text-gray-400">
+              条件ごとに Error / Warning の閾値をセットで指定します（例: 使用率 ≧ Error 90・Warning 80）。
+              Error から先に判定し、空欄のレベルは判定しません。
+            </p>
 
             <datalist id={`checks-${serverId}`}>
               {checkNames.map(n => <option key={n} value={n} />)}
@@ -318,14 +378,15 @@ function AlertRuleModal({
                               >
                                 {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
                               </select>
-                              <input
-                                required
-                                type="number"
-                                step="any"
-                                value={cond.threshold}
-                                onChange={e => updateCondition(gi, ci, { threshold: e.target.value })}
-                                className="input w-28 py-1.5 text-xs"
-                                placeholder="閾値"
+                              <ThresholdInput
+                                severity="error"
+                                value={cond.error_threshold}
+                                onChange={v => updateCondition(gi, ci, { error_threshold: v })}
+                              />
+                              <ThresholdInput
+                                severity="warning"
+                                value={cond.warning_threshold}
+                                onChange={v => updateCondition(gi, ci, { warning_threshold: v })}
                               />
                               <button
                                 type="button"
@@ -402,29 +463,37 @@ function AlertRuleRow({
   deleting: boolean
 }) {
   const [confirm, setConfirm] = useState(false)
-  const s = SEVERITY_STYLES[rule.severity]
+  const severities = ruleSeverities(rule)
+  const fired = firing ? SEVERITY_STYLES[firing.severity] : null
 
   return (
     <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-      firing ? s.card : 'border-gray-200 bg-white'
+      fired ? fired.card : 'border-gray-200 bg-white'
     } ${rule.enabled ? '' : 'opacity-60'}`}>
-      <SeverityBadge severity={rule.severity} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium text-gray-800">{rule.name}</span>
-          {firing && (
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${s.badge}`}>
-              <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${s.dot}`} />
-              発火中
+          {firing && fired && (
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${fired.badge}`}>
+              <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${fired.dot}`} />
+              {SEVERITY_TEXT[firing.severity]} 発火中
             </span>
           )}
           {!rule.enabled && (
             <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">無効</span>
           )}
         </div>
-        <div className="truncate font-mono text-xs text-gray-500" title={describeGroups(rule.groups)}>
-          {describeGroups(rule.groups)}
-        </div>
+        {severities.map(sev => {
+          const desc = describeGroups(rule.groups, sev) ?? ''
+          return (
+            <div key={sev} className="flex items-baseline gap-1.5">
+              <span className={`shrink-0 rounded px-1 text-[10px] font-semibold ${SEVERITY_STYLES[sev].badge}`}>
+                {SEVERITY_TEXT[sev]}
+              </span>
+              <span className="truncate font-mono text-xs text-gray-500" title={desc}>{desc}</span>
+            </div>
+          )
+        })}
       </div>
 
       {confirm ? (
@@ -498,7 +567,7 @@ export default function AlertRules({ serverId }: { serverId: string }) {
 
       {rules.length === 0 ? (
         <p className="text-sm text-gray-400">
-          メトリクスの閾値から Error / Warning を判定するルールを設定できます。
+          メトリクスの閾値を Error / Warning のセットで決めて、アラートを出すルールを設定できます。
         </p>
       ) : (
         <div className="space-y-1.5">

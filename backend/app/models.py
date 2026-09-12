@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Servers ──────────────────────────────────────────────────────────────────
@@ -181,12 +181,22 @@ class PagedResponse(BaseModel):
 AlertSeverity = Literal["error", "warning"]
 AlertOperator = Literal[">", ">=", "<", "<=", "==", "!="]
 
+SEVERITIES: tuple[AlertSeverity, ...] = ("error", "warning")
+
+# 大小を比べる演算子と、Error の閾値が Warning より大きい(1)／小さい(-1)べき向き
+_ORDERED_OPERATORS: dict[str, int] = {">": 1, ">=": 1, "<": -1, "<=": -1}
+
 
 class AlertCondition(BaseModel):
-    """メトリクス1件に対する閾値条件。"""
+    """メトリクス1件に対する閾値条件。Error / Warning の閾値をセットで持つ。
+
+    例: usage_percent >= の Error 90 / Warning 80。
+    片方だけの指定も可能で、閾値の無いレベルはこの条件では判定されない。
+    """
     metric_name: str = Field(min_length=1)
     operator: AlertOperator = ">"
-    threshold: float
+    error_threshold: Optional[float] = None
+    warning_threshold: Optional[float] = None
     # 特定チェック（レポートの name）に限定する場合に指定。None なら全チェックが対象
     check_name: Optional[str] = None
 
@@ -203,15 +213,48 @@ class AlertCondition(BaseModel):
     def _strip_check_name(cls, v: Optional[str]) -> Optional[str]:
         return (v.strip() or None) if v else None
 
+    @model_validator(mode="after")
+    def _validate_thresholds(self) -> "AlertCondition":
+        if self.error_threshold is None and self.warning_threshold is None:
+            raise ValueError("error_threshold or warning_threshold is required")
+        direction = _ORDERED_OPERATORS.get(self.operator)
+        if direction and self.error_threshold is not None and self.warning_threshold is not None:
+            # Error は Warning より厳しい側でなければ、Warning が先に出る意味がなくなる
+            if (self.error_threshold - self.warning_threshold) * direction < 0:
+                side = "greater" if direction > 0 else "less"
+                raise ValueError(
+                    f"error_threshold must be {side} than or equal to warning_threshold "
+                    f"for operator '{self.operator}'"
+                )
+        return self
+
+    def threshold_for(self, severity: AlertSeverity) -> Optional[float]:
+        return self.error_threshold if severity == "error" else self.warning_threshold
+
 
 class AlertConditionGroup(BaseModel):
     """グループ内の条件は AND、グループ同士は OR で結合される。"""
     conditions: list[AlertCondition] = Field(min_length=1)
 
+    def severities(self) -> list[AlertSeverity]:
+        """このグループで判定できるレベル（全条件に閾値がそろっているもの）。"""
+        return [
+            sev for sev in SEVERITIES
+            if all(c.threshold_for(sev) is not None for c in self.conditions)
+        ]
+
+    @model_validator(mode="after")
+    def _validate_severities(self) -> "AlertConditionGroup":
+        if not self.severities():
+            raise ValueError(
+                "all conditions in a group must share a threshold level: "
+                "give every condition an Error threshold, a Warning threshold, or both"
+            )
+        return self
+
 
 class AlertRuleBase(BaseModel):
     name: str = Field(min_length=1)
-    severity: AlertSeverity = "warning"
     message: Optional[str] = None
     enabled: bool = True
     groups: list[AlertConditionGroup] = Field(min_length=1)
@@ -228,7 +271,6 @@ class AlertRuleCreate(AlertRuleBase):
 
 class AlertRuleUpdate(BaseModel):
     name: Optional[str] = None
-    severity: Optional[AlertSeverity] = None
     message: Optional[str] = None
     enabled: Optional[bool] = None
     groups: Optional[list[AlertConditionGroup]] = None
@@ -240,6 +282,11 @@ class AlertRuleOut(AlertRuleBase):
     server_name: Optional[str] = None
     created_at: str
     updated_at: str
+
+    def severities(self) -> list[AlertSeverity]:
+        """このルールが発火しうるレベル。"""
+        found = {sev for g in self.groups for sev in g.severities()}
+        return [sev for sev in SEVERITIES if sev in found]
 
 
 class AlertMatch(BaseModel):

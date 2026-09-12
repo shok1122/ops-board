@@ -27,10 +27,10 @@ async def create_alert_rule(body: AlertRuleCreate):
             raise HTTPException(404, "Server not found")
         await db.execute(
             "INSERT INTO alert_rules "
-            "(id, server_id, name, severity, message, enabled, groups_json, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "(id, server_id, name, message, enabled, groups_json, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
-                rule_id, body.server_id, body.name, body.severity, body.message,
+                rule_id, body.server_id, body.name, body.message,
                 int(body.enabled), dump_groups(body.groups), now, now,
             ),
         )
@@ -52,8 +52,6 @@ async def update_alert_rule(rule_id: str, body: AlertRuleUpdate):
         updates: dict = {}
         if body.name is not None:
             updates["name"] = body.name
-        if body.severity is not None:
-            updates["severity"] = body.severity
         # message は空文字/None を送ることで消去できるよう、送信有無で判定する
         if "message" in body.model_fields_set:
             updates["message"] = (body.message or "").strip() or None

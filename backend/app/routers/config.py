@@ -1,9 +1,9 @@
 from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from app.alerts import dump_groups, parse_groups
+from pydantic import BaseModel, model_validator
+from app.alerts import dump_groups, parse_groups, upgrade_legacy_groups
 from app.database import get_db, new_id, now_iso
-from app.models import AlertConditionGroup, AlertSeverity, NotificationSettingsBase
+from app.models import AlertConditionGroup, NotificationSettingsBase
 from app.notifications import dump_severities, load_settings
 from app.scheduler import reload_all_jobs, unschedule_job
 
@@ -33,10 +33,17 @@ class AlertRuleExport(BaseModel):
     id: str
     server_id: str
     name: str
-    severity: AlertSeverity = "warning"
     message: Optional[str] = None
     enabled: bool = True
     groups: list[AlertConditionGroup]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy(cls, data: Any) -> Any:
+        """旧形式（ルール単位の severity ＋ 単一 threshold）のファイルも取り込めるようにする。"""
+        if isinstance(data, dict) and data.get("severity"):
+            return {**data, "groups": upgrade_legacy_groups(data.get("groups"), data["severity"])}
+        return data
 
 
 class ConfigExport(BaseModel):
@@ -85,7 +92,6 @@ async def export_config():
             id=r["id"],
             server_id=r["server_id"],
             name=r["name"],
-            severity=r["severity"],
             message=r["message"],
             enabled=bool(r["enabled"]),
             groups=parse_groups(r["groups_json"]),
@@ -152,10 +158,10 @@ async def import_config(body: ConfigExport):
         for r in body.alert_rules:
             await db.execute(
                 "INSERT INTO alert_rules "
-                "(id, server_id, name, severity, message, enabled, groups_json, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "(id, server_id, name, message, enabled, groups_json, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    r.id, r.server_id, r.name, r.severity, r.message,
+                    r.id, r.server_id, r.name, r.message,
                     int(r.enabled), dump_groups(r.groups), now, now,
                 ),
             )

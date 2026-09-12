@@ -20,7 +20,7 @@ Dashboard → Servers → Jobs → Execution History → Log Viewer
 | Execution History | List all execution results. Filterable by status |
 | Log Viewer | NDJSON format shown as a structured table. Plain text displayed as-is |
 | Worker Monitoring | View latest check results (CPU, memory, disk, process, etc.) pushed by ops-worker |
-| Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts using AND/OR threshold conditions, surfaced on the dashboard |
+| Metric Alerts | Per-server rules that turn pushed metrics into **Error** / **Warning** alerts — each condition carries both thresholds as a set — surfaced on the dashboard |
 | Scripts Management | Create and edit shell scripts served to ops-worker via the API |
 | Dashboard | Summary cards (success rate, failure count, etc.) and recent execution list |
 | Teams Notification | Posts firing **Error** / **Warning** alerts to Microsoft Teams as an Adaptive Card, on a cron schedule set from the Web UI |
@@ -159,9 +159,8 @@ Rules are managed from the server card on the **Servers** screen.
 | Field | Description |
 |-------|-------------|
 | Name | Label shown on the alert |
-| Severity | `Error` (red) or `Warning` (amber) |
 | Message | Optional note shown alongside the alert |
-| Conditions | Threshold comparisons combined with AND / OR |
+| Conditions | Threshold comparisons combined with AND / OR, each carrying its `Error` and `Warning` thresholds |
 | Enabled | Disabled rules are never evaluated |
 
 A condition targets a metric by its `name` — an arbitrary string, typed freely (names already
@@ -169,18 +168,39 @@ received from the server are offered as autocomplete suggestions). The optional 
 restricts a condition to one report (the top-level `name` of the payload); leave it blank to match
 the metric in any check.
 
+### Error and Warning Thresholds
+
+A rule is not tied to one severity. Every condition defines its `Error` and `Warning` thresholds as
+a **set**, so a single rule covers both levels of the same metric:
+
+```
+disk.usage_percent  >=   Error 90   Warning 80
+```
+
+The rule is evaluated at the `Error` level first and, if that does not hold, at the `Warning` level;
+the alert fires at the first level that matches. With the example above a measured 85% raises a
+`Warning`, and 92% raises an `Error` from the same rule.
+
+Either threshold may be left blank — a level with no threshold is simply never evaluated, which is
+how an `Error`-only rule (say, a service that must always be up) is written. For ordered operators
+(`>`, `>=`, `<`, `<=`) the `Error` threshold must be on the stricter side of the `Warning` one.
+
+When a firing alert escalates from `Warning` to `Error` (or drops back), the duration shown on the
+alert restarts at the moment the level changed, and Teams is notified as a new alert.
+
 ### Combining Conditions
 
 Conditions live in groups: **within a group they are ANDed, and groups are ORed together**.
 
 ```
-Group 1:  memory.usage_percent >= 90  AND  memory.available_bytes < 1073741824
+Group 1:  memory.usage_percent >= (Error 95 / Warning 90)
+    AND   memory.available_bytes < (Error 536870912 / Warning 1073741824)
    OR
-Group 2:  cpu.load1 > 8
+Group 2:  cpu.load1 > (Error 16 / Warning 8)
 ```
 
-Any number of rules can be defined per server, so a metric can drive both a `Warning` rule and a
-stricter `Error` rule.
+Conditions ANDed together must share a level for it to be evaluated: if one condition in a group has
+no `Warning` threshold, that group is only evaluated at the `Error` level.
 
 ### Example
 
@@ -203,9 +223,9 @@ Given this report from ops-worker:
 }
 ```
 
-a rule with the single condition `usage_percent >= 90` stays silent, and starts firing as soon as a
-later report crosses the threshold. The alert shows the measured value that triggered it
-(`memory.usage_percent 95 percent (>= 90)`) and how long it has been firing.
+a rule with the single condition `usage_percent >=` / `Error 90` / `Warning 80` stays silent, and
+starts firing as soon as a later report crosses a threshold. The alert shows the measured value that
+triggered it (`memory.usage_percent 95 percent (>= 90)`) and how long it has been firing.
 
 Supported operators: `>`, `>=`, `<`, `<=`, `==`, `!=`.
 A condition whose metric is absent from the latest reports is treated as not satisfied.

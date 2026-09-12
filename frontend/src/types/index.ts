@@ -230,7 +230,9 @@ export interface AlertCondition {
   /** メトリクスの name（任意の文字列） */
   metric_name: string
   operator: AlertOperator
-  threshold: number
+  /** Error / Warning の閾値。片方だけの指定も可（未指定のレベルは判定されない） */
+  error_threshold?: number | null
+  warning_threshold?: number | null
   /** 特定のチェック（レポートの name）に限定する場合に指定 */
   check_name?: string | null
 }
@@ -245,7 +247,6 @@ export interface AlertRule {
   server_id: string
   server_name?: string
   name: string
-  severity: AlertSeverity
   message?: string | null
   enabled: boolean
   groups: AlertConditionGroup[]
@@ -256,7 +257,6 @@ export interface AlertRule {
 export interface AlertRuleCreate {
   server_id: string
   name: string
-  severity: AlertSeverity
   message?: string | null
   enabled: boolean
   groups: AlertConditionGroup[]
